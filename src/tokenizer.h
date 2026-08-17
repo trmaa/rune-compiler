@@ -1,3 +1,9 @@
+/* tokenizer.h
+ * tokenizer module for zc
+ * Copyright (c) 2026 Pablo Trik Marin
+ * License: GPL
+ */
+
 #ifndef TOKENIZER_H
 #define TOKENIZER_H
 

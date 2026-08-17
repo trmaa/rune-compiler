@@ -1,3 +1,9 @@
+/* debug.c
+ * debug and error utilities for zc
+ * Copyright (c) 2026 Pablo Trik Marin
+ * License: GPL
+ */
+
 #include <stdio.h>
 #include <stdarg.h>
 #include "debug.h"

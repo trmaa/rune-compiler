@@ -1,3 +1,9 @@
+/* tokenizer.c
+ * tokenizer module for zc
+ * Copyright (c) 2026 Pablo Trik Marin
+ * License: GPL
+ */
+
 #include <stddef.h>
 #include <stdbool.h>
 #include "debug.h"
@@ -8,6 +14,13 @@ int token_count;
 
 static void add_token(enum token_type type, char *start, int length);
 
+/*
+ * Tokenizes the source string into an array of tokens.
+ * Recognizes keywords, identifiers, numbers, string literals,
+ * and single-character symbols. Comments starting with //
+ * are skipped. The resulting tokens are stored in the global
+ * tokens[] array with token_count updated accordingly.
+ */
 void tokenize(char *src)
 {
 	char *start;

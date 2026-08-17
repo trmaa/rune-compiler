@@ -1,3 +1,9 @@
+/* main.c
+ * CLI entry point for zc
+ * Copyright (c) 2026 Pablo Trik Marin
+ * License: GPL
+ */
+
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";

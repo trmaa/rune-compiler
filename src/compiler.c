@@ -1,3 +1,9 @@
+/* compiler.c
+ * compiler orchestrator for zc
+ * Copyright (c) 2026 Pablo Trik Marin
+ * License: GPL
+ */
+
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -5,6 +11,7 @@
 #include <unistd.h>
 #include "debug.h"
 #include "tokenizer.h"
+#include "codegen.h"
 
 static void get_paths(const char *path, char *src, char *out);
 
@@ -32,16 +39,9 @@ void compile(const char *path)
 
 	tokenize(src);
 
-#ifdef DEBUG
-	{
-		int i;
-		for (i = 0; i < token_count; i++)
-			debug("tok[%d]: type=%d, '%.*s'",
-			      i, tokens[i].type, tokens[i].length, tokens[i].start);
-	}
-#endif
-
 	ofd = open(opt, O_CREAT | O_WRONLY | O_TRUNC, 0644);
+
+	codegen(ofd);
 
 	close(ofd);
 }
