@@ -3,6 +3,8 @@
 const char *AUTHOR = "Pablo Trik Marin";
 const char *VERSION = "a0.1-slime";
 
+/* possible const struct conf {...} CONFIG; */
+
 void help();
 
 static int get_opts(int argc, char *argv[]);

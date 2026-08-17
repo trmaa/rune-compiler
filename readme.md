@@ -109,4 +109,12 @@ foo:
 
 There is a similar example at examples/.
 
+Then, to assemble and link just:
+
+```console
+$ as --32 file.s -o file.o
+$ cc -m32 -no-pie file.o
+$ ./a.out
+```
+
 ...

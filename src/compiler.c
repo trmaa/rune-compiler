@@ -1,10 +1,12 @@
-#include <stddef.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 #include <fcntl.h>
 #include <unistd.h>
 #include "debug.h"
+#include "tokenizer.h"
 
 static void get_paths(const char *path, char *src, char *out);
-static void tokenize(char *src);
 
 void compile(const char *path)
 {
@@ -30,14 +32,19 @@ void compile(const char *path)
 
 	tokenize(src);
 
+#ifdef DEBUG
+	{
+		int i;
+		for (i = 0; i < token_count; i++)
+			debug("tok[%d]: type=%d, '%.*s'",
+			      i, tokens[i].type, tokens[i].length, tokens[i].start);
+	}
+#endif
+
 	ofd = open(opt, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 
 	close(ofd);
 }
-
-static void
-tokenize(char *src)
-{}
 
 static void
 get_paths(const char *path, char *src, char *out)

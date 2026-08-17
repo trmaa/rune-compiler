@@ -24,10 +24,11 @@ all: $(out)
 $(out): $(obj)
 	cc $^ -o $@ $(ldf)
 
+# esta parte >/dev/null 2>&1 para pipear less mas limpio
 debug:
-	cc $(src) -o $@ $(ccf) $(ldf) -DDEBUG
-	./debug examples/test.z
-	rm debug
+	@cc $(src) -o $@ $(ccf) $(ldf) -DDEBUG
+	@./debug examples/test.z 2>&1 >/dev/null
+	@rm debug
 
 install:
 	cp $(out) /usr/bin
