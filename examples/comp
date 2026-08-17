@@ -1,0 +1,4 @@
+#! /usr/bin/env bash
+
+as --32 test-exp.s -o test.o
+cc -m32 -no-pie test.o
