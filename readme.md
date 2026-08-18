@@ -28,6 +28,10 @@ Usage: rc [options] [file.ru]
 Options:
         -h print this text.
         -v show the version.
+$ ./rc file.ru # compiles file.ru into file.s
+$ as --32 file.s -o file.o # assembles the file
+$ cc -m32 -no-pie file.o # links the binarie with libc and outputs a program
+$ ./a.out # run the program
 ```
 
 ## Specs
@@ -142,9 +146,6 @@ There are a similar example at tests/.
 Then, to assemble and link just:
 
 ```console
-$ as --32 file.s -o file.o
-$ cc -m32 -no-pie file.o
-$ ./a.out
 ```
 
 ...
