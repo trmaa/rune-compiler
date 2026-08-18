@@ -44,7 +44,7 @@ enum token_type {
 };
 
 struct token {
-	int type;
+	enum token_type type;
 	char *start;
 	int length;
 };
