@@ -1,13 +1,13 @@
 #! /usr/bin/env bash
 
 main() {
-	local files=*.ru
+	local files=*.rn
 
 	for f in $files; do
 		echo -n "Compiling $f..."
 
-		local i=${f//.ru/.s}
-		local o=${f//.ru/.o}
+		local i=${f//.rn/.s}
+		local o=${f//.rn/.o}
 
 		if [[ ! -f $i ]]; then
 			echo -e "\e[31m\n$f wasn't compiled\e[0m" >&2

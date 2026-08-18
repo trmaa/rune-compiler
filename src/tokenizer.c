@@ -66,9 +66,9 @@ void tokenize(char *src)
 				i++;
 			len = (int)(&src[i] - start);
 
-			if (len == 4 && !memcmp(start, "let", 4))
+			if (len == 3 && !memcmp(start, "let", 3))
 				add_token(SETWT, start, len);
-			else if (len == 4 && !memcmp(start, "leb", 4))
+			else if (len == 3 && !memcmp(start, "leb", 3))
 				add_token(SETBT, start, len);
 			else if (len == 4 && !memcmp(start, "setw", 4))
 				add_token(SETWT, start, len);

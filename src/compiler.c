@@ -38,6 +38,7 @@ void compile(const char *path)
 	/* file loaded at src */
 
 	tokenize(src);
+	free(src);
 
 	ofd = open(opt, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 
