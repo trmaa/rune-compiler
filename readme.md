@@ -1,12 +1,34 @@
 # rune compiler (RC)
 
-It is a small compiler to create binaries in very old computers.
+Lightwaight programming language for x86-i386 computers and above.
+
+Resembles assembly but has loops, variables, and pointers.
 
 See examples at tests/.
 
-## For now
+## Done for now
 
 - Tokenizer
+
+## How to
+
+### Build
+
+```console
+$ make # compile source into ./rc
+$ make debug f=file.ru # see all debug logs of rc after compiling file.ru
+$ make install # install the compiler
+```
+
+### Usage
+
+```console
+$ ./rc -help
+Usage: rc [options] [file.ru]
+Options:
+        -h print this text.
+        -v show the version.
+```
 
 ## Specs
 
@@ -54,8 +76,8 @@ called:
 
 The outputed assembly code uses libc, so this code:
 
-```c
-// file.z
+```rust
+// file.ru
 
 setw glob = 67;
 setw arr[10];
