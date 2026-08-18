@@ -140,12 +140,4 @@ foo:
 
 	ret
 ```
-
-There are a similar example at tests/.
-
-Then, to assemble and link just:
-
-```console
-```
-
 ...
