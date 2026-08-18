@@ -2,9 +2,15 @@
 
 It is a small compiler to create binaries in very old computers.
 
+See examples at tests/.
+
+## For now
+
+- Tokenizer
+
 ## Specs
 
-There are two data types: word, and byte.
+There are two data types: setw, and byte.
 
 Input: .ru file, Output: x86-i386 AT&T .s file.
 
@@ -51,11 +57,11 @@ The outputed assembly code uses libc, so this code:
 ```c
 // file.z
 
-word glob = 67;
-word arr[10];
+setw glob = 67;
+setw arr[10];
 
 pub fn main {
-	word res = glob;
+	setw res = glob;
 
 	foo();
 
@@ -109,7 +115,7 @@ foo:
 	ret
 ```
 
-There is a similar example at examples/.
+There are a similar example at tests/.
 
 Then, to assemble and link just:
 
