@@ -28,7 +28,7 @@ void compile(const char *path)
 	/* load input file in memory */
 	ifd = open(spt, O_RDONLY);
 	if (ifd == -1)
-		fatal(USER_ERR, NULL, "%s does not exist!", src);
+		fatal(USER_ERR, NULL, "%s does not exist!", path);
 	src_sz = lseek(ifd, 0, SEEK_END);
 	lseek(ifd, 0, SEEK_SET);
 	src = malloc(src_sz + 1);

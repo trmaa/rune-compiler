@@ -154,6 +154,48 @@ type_size(int type)
 	return type == TYPE_BYTE ? 1 : 4;
 }
 
+static void
+emit_load_var(char *name, int name_len)
+{
+	int idx;
+	idx = find_local(name, name_len);
+	if (idx >= 0) {
+		if (locals[idx].type == TYPE_BYTE)
+			out("\tmovzbl\t%d(%%ebp), %%eax\n", locals[idx].offset);
+		else
+			out("\tmov\t%d(%%ebp), %%eax\n", locals[idx].offset);
+	} else if (find_global(name, name_len) >= 0) {
+		idx = find_global(name, name_len);
+		if (globals[idx].type == TYPE_BYTE)
+			out("\tmovzbl\t%.*s, %%eax\n", name_len, name);
+		else
+			out("\tmov\t%.*s, %%eax\n", name_len, name);
+	} else {
+		fatal(USER_ERR, NULL, "Undefined variable '%.*s'", name_len, name);
+	}
+}
+
+static void
+emit_store_var(char *name, int name_len)
+{
+	int idx;
+	idx = find_local(name, name_len);
+	if (idx >= 0) {
+		if (locals[idx].type == TYPE_BYTE)
+			out("\tmovb\t%%al, %d(%%ebp)\n", locals[idx].offset);
+		else
+			out("\tmov\t%%eax, %d(%%ebp)\n", locals[idx].offset);
+	} else if (find_global(name, name_len) >= 0) {
+		idx = find_global(name, name_len);
+		if (globals[idx].type == TYPE_BYTE)
+			out("\tmovb\t%%al, %.*s\n", name_len, name);
+		else
+			out("\tmov\t%%eax, %.*s\n", name_len, name);
+	} else {
+		fatal(USER_ERR, NULL, "Undefined variable '%.*s'", name_len, name);
+	}
+}
+
 static void emit_body(void);
 static void emit_primary(void);
 static int get_prec(int type);
@@ -269,9 +311,13 @@ skip_stmt(void)
 				adv();
 			}
 			expect(RPAREN);
-		} else if (cur().type == EQUALT) {
+		} else if (cur().type == EQUALT ||
+		    cur().type == PLUSEQ || cur().type == MINUSEQ ||
+		    cur().type == STAREQ || cur().type == SLASHEQ) {
 			adv();
 			skip_expr();
+		} else if (cur().type == PLUSPLUS || cur().type == MINUSMINUS) {
+			adv();
 		}
 		expect(SEMIT);
 	} else {
@@ -317,7 +363,7 @@ get_prec(int type)
 	case LET: case GET:         return 7;
 	case LSHIFTT: case RSHIFTT: return 8;
 	case PLUST: case MINUST:    return 9;
-	case START: case SLASHT:    return 10;
+	case START: case SLASHT: case MODT: return 10;
 	default:                    return 0;
 	}
 }
@@ -341,6 +387,13 @@ emit_binop(int op)
 		out("\tmov\t%%ebx, %%eax\n");
 		out("\tcdq\n");
 		out("\tidiv\t%%ecx\n");
+		break;
+	case MODT:
+		out("\tmov\t%%eax, %%ecx\n");
+		out("\tmov\t%%ebx, %%eax\n");
+		out("\tcdq\n");
+		out("\tidiv\t%%ecx\n");
+		out("\tmov\t%%edx, %%eax\n");
 		break;
 	case LSHIFTT:
 		out("\tmov\t%%eax, %%ecx\n");
@@ -462,6 +515,9 @@ emit_expr(void)
 static void
 emit_unary(void)
 {
+	char *name;
+	int name_len;
+
 	if (cur().type == TILDE) {
 		adv();
 		emit_unary();
@@ -475,6 +531,32 @@ emit_unary(void)
 		out("\tcmp\t$0, %%eax\n");
 		out("\tsete\t%%al\n");
 		out("\tmovzbl\t%%al, %%eax\n");
+		return;
+	}
+
+	if (cur().type == PLUSPLUS) {
+		adv();
+		if (cur().type != IDENTT)
+			fatal(USER_ERR, NULL, "Expected variable after '++'");
+		name = cur().start;
+		name_len = cur().length;
+		adv();
+		emit_load_var(name, name_len);
+		out("\tadd\t$1, %%eax\n");
+		emit_store_var(name, name_len);
+		return;
+	}
+
+	if (cur().type == MINUSMINUS) {
+		adv();
+		if (cur().type != IDENTT)
+			fatal(USER_ERR, NULL, "Expected variable after '--'");
+		name = cur().start;
+		name_len = cur().length;
+		adv();
+		emit_load_var(name, name_len);
+		out("\tsub\t$1, %%eax\n");
+		emit_store_var(name, name_len);
 		return;
 	}
 
@@ -525,7 +607,8 @@ parse_num(const char *s, int len)
 static void
 emit_primary(void)
 {
-	int idx;
+	char *name;
+	int name_len;
 
 	if (cur().type == NUMT || cur().type == CHARLITT) {
 		out("\tmov\t$%d, %%eax\n", parse_num(cur().start, cur().length));
@@ -534,22 +617,33 @@ emit_primary(void)
 	}
 
 	if (cur().type == IDENTT) {
-		idx = find_local(cur().start, cur().length);
-		if (idx >= 0) {
-			if (locals[idx].type == TYPE_BYTE)
-				out("\tmovzbl\t%d(%%ebp), %%eax\n", locals[idx].offset);
-			else
-				out("\tmov\t%d(%%ebp), %%eax\n", locals[idx].offset);
-		} else if (find_global(cur().start, cur().length) >= 0) {
-			idx = find_global(cur().start, cur().length);
-			if (globals[idx].type == TYPE_BYTE)
-				out("\tmovzbl\t%.*s, %%eax\n", cur().length, cur().start);
-			else
-				out("\tmov\t%.*s, %%eax\n", cur().length, cur().start);
-		} else {
-			fatal(USER_ERR, NULL, "Undefined variable '%.*s'", cur().length, cur().start);
-		}
+		name = cur().start;
+		name_len = cur().length;
 		adv();
+
+		/* postfix ++ */
+		if (cur().type == PLUSPLUS) {
+			adv();
+			emit_load_var(name, name_len);
+			out("\tpush\t%%eax\n");
+			out("\tadd\t$1, %%eax\n");
+			emit_store_var(name, name_len);
+			out("\tpop\t%%eax\n");
+			return;
+		}
+
+		/* postfix -- */
+		if (cur().type == MINUSMINUS) {
+			adv();
+			emit_load_var(name, name_len);
+			out("\tpush\t%%eax\n");
+			out("\tsub\t$1, %%eax\n");
+			emit_store_var(name, name_len);
+			out("\tpop\t%%eax\n");
+			return;
+		}
+
+		emit_load_var(name, name_len);
 		return;
 	}
 
@@ -561,29 +655,52 @@ emit_assignment(void)
 {
 	char *name;
 	int name_len;
-	int idx;
+	int op;
 
 	name = cur().start;
 	name_len = cur().length;
 	adv();
-	expect(EQUALT);
-	emit_expr();
+	op = cur().type;
 
-	idx = find_local(name, name_len);
-	if (idx >= 0) {
-		if (locals[idx].type == TYPE_BYTE)
-			out("\tmovb\t%%al, %d(%%ebp)\n", locals[idx].offset);
+	/* postfix ++ / -- */
+	if (op == PLUSPLUS || op == MINUSMINUS) {
+		adv();
+		emit_load_var(name, name_len);
+		out("\tpush\t%%eax\n");
+		if (op == PLUSPLUS)
+			out("\tadd\t$1, %%eax\n");
 		else
-			out("\tmov\t%%eax, %d(%%ebp)\n", locals[idx].offset);
-	} else if (find_global(name, name_len) >= 0) {
-		idx = find_global(name, name_len);
-		if (globals[idx].type == TYPE_BYTE)
-			out("\tmovb\t%%al, %.*s\n", name_len, name);
-		else
-			out("\tmov\t%%eax, %.*s\n", name_len, name);
-	} else {
-		fatal(USER_ERR, NULL, "Undefined variable '%.*s'", name_len, name);
+			out("\tsub\t$1, %%eax\n");
+		emit_store_var(name, name_len);
+		out("\tpop\t%%eax\n");
+		expect(SEMIT);
+		return;
 	}
+
+	/* plain assignment: x = expr */
+	if (op == EQUALT) {
+		adv();
+		emit_expr();
+		emit_store_var(name, name_len);
+		expect(SEMIT);
+		return;
+	}
+
+	/* compound assignment: x += expr, x -= expr, x *= expr, x /= expr */
+	adv();
+	emit_load_var(name, name_len);
+	out("\tpush\t%%eax\n");
+	emit_expr();
+	out("\tpop\t%%ebx\n");
+
+	/* map compound token to binary op token for emit_binop */
+	if (op == PLUSEQ) op = PLUST;
+	else if (op == MINUSEQ) op = MINUST;
+	else if (op == STAREQ) op = START;
+	else if (op == SLASHEQ) op = SLASHT;
+
+	emit_binop(op);
+	emit_store_var(name, name_len);
 	expect(SEMIT);
 }
 
@@ -683,27 +800,61 @@ emit_for(void)
 		int saved = current;
 		current = update_start;
 		while (cur().type != LBRAC && cur().type != NEWT) {
-			if (cur().type == IDENTT && peek(1).type == EQUALT) {
+			if (cur().type == IDENTT &&
+			    (peek(1).type == EQUALT || peek(1).type == PLUSEQ ||
+			     peek(1).type == MINUSEQ || peek(1).type == STAREQ ||
+			     peek(1).type == SLASHEQ ||
+			     peek(1).type == PLUSPLUS || peek(1).type == MINUSMINUS)) {
 				char *uname = cur().start;
 				int uname_len = cur().length;
-				int uidx;
-				adv();
-				adv();
-				emit_expr();
-				uidx = find_local(uname, uname_len);
-				if (uidx >= 0) {
-					if (locals[uidx].type == TYPE_BYTE)
-						out("\tmovb\t%%al, %d(%%ebp)\n", locals[uidx].offset);
-					else
-						out("\tmov\t%%eax, %d(%%ebp)\n", locals[uidx].offset);
-				} else if (find_global(uname, uname_len) >= 0) {
-					uidx = find_global(uname, uname_len);
-					if (globals[uidx].type == TYPE_BYTE)
-						out("\tmovb\t%%al, %.*s\n", uname_len, uname);
-					else
-						out("\tmov\t%%eax, %.*s\n", uname_len, uname);
-				} else
+				int uidx = find_local(uname, uname_len);
+				int is_global = (uidx < 0) ? find_global(uname, uname_len) : -1;
+				int utype;
+				int uoffset;
+
+				if (uidx >= 0)
+					utype = locals[uidx].type, uoffset = locals[uidx].offset;
+				else if (is_global >= 0)
+					utype = globals[is_global].type, uoffset = 0;
+				else
 					fatal(USER_ERR, NULL, "Undefined variable '%.*s'", uname_len, uname);
+
+				adv(); /* skip var name */
+				if (cur().type == PLUSPLUS) {
+					adv();
+					emit_load_var(uname, uname_len);
+					out("\tadd\t$1, %%eax\n");
+					emit_store_var(uname, uname_len);
+				} else if (cur().type == MINUSMINUS) {
+					adv();
+					emit_load_var(uname, uname_len);
+					out("\tsub\t$1, %%eax\n");
+					emit_store_var(uname, uname_len);
+				} else {
+					int uop = cur().type;
+					adv();
+					if (uop == EQUALT) {
+						emit_expr();
+	} else if (cur().type == PLUSPLUS || cur().type == MINUSMINUS ||
+	    cur().type == NUMT || cur().type == CHARLITT ||
+	    cur().type == TILDE || cur().type == BANG ||
+	    cur().type == LPAREN) {
+		skip_expr();
+		expect(SEMIT);
+	} else {
+						int bop;
+						emit_load_var(uname, uname_len);
+						out("\tpush\t%%eax\n");
+						emit_expr();
+						out("\tpop\t%%ebx\n");
+						if (uop == PLUSEQ) bop = PLUST;
+						else if (uop == MINUSEQ) bop = MINUST;
+						else if (uop == STAREQ) bop = START;
+						else bop = SLASHT;
+						emit_binop(bop);
+					}
+					emit_store_var(uname, uname_len);
+				}
 			} else {
 				adv();
 			}
@@ -729,7 +880,10 @@ emit_stmt(void)
 		emit_decl(TYPE_BYTE);
 		break;
 	case IDENTT:
-		if (peek(1).type == EQUALT)
+		if (peek(1).type == EQUALT ||
+		    peek(1).type == PLUSEQ || peek(1).type == MINUSEQ ||
+		    peek(1).type == STAREQ || peek(1).type == SLASHEQ ||
+		    peek(1).type == PLUSPLUS || peek(1).type == MINUSMINUS)
 			emit_assignment();
 		else
 			emit_call();
@@ -745,6 +899,16 @@ emit_stmt(void)
 		break;
 	case FORT:
 		emit_for();
+		break;
+	case PLUSPLUS:
+	case MINUSMINUS:
+	case NUMT:
+	case CHARLITT:
+	case TILDE:
+	case BANG:
+	case LPAREN:
+		emit_expr();
+		expect(SEMIT);
 		break;
 	default:
 		fatal(USER_ERR, NULL, "Unexpected token in body");
@@ -1039,7 +1203,6 @@ emit_call(void)
 	int fn_len;
 	int args_count = 0;
 	int i;
-	char *arg_types[32];
 	char *arg_starts[32];
 	int arg_lengths[32];
 
@@ -1051,7 +1214,6 @@ emit_call(void)
 	while (cur().type != RPAREN) {
 		if (match(COMMAT))
 			continue;
-		arg_types[args_count] = cur().start;
 		arg_starts[args_count] = cur().start;
 		arg_lengths[args_count] = cur().length;
 		args_count++;
@@ -1061,7 +1223,7 @@ emit_call(void)
 	expect(SEMIT);
 
 	for (i = args_count - 1; i >= 0; i--) {
-		if (strings[0][0] && find_string(arg_starts[i], arg_lengths[i]) >= 0)
+		if (string_count > 0 && find_string(arg_starts[i], arg_lengths[i]) >= 0)
 			out("\tpush\t$str%d\n", find_string(arg_starts[i], arg_lengths[i]));
 		else if (find_local(arg_starts[i], arg_lengths[i]) >= 0) {
 			int alidx = find_local(arg_starts[i], arg_lengths[i]);
@@ -1102,6 +1264,22 @@ emit_ret(void)
 	expect(SEMIT);
 }
 
+static void
+skip_fn_body(void)
+{
+	int depth = 0;
+
+	while (cur().type != EOFT) {
+		if (cur().type == LBRAC)
+			depth++;
+		else if (cur().type == RBRAC) {
+			if (depth == 0) return;
+			if (--depth == 0) { adv(); return; }
+		}
+		adv();
+	}
+}
+
 void codegen(int fd)
 {
 	out_fd = fd;
@@ -1112,7 +1290,32 @@ void codegen(int fd)
 
 	collect_strings();
 
+	/* first pass: emit globals and strings in .data */
 	out("\t.data\n");
+	while (cur().type != EOFT) {
+		if (cur().type == NEWT) {
+			adv();
+			continue;
+		}
+		if (cur().type == PUBT) {
+			adv();
+			if (cur().type == WORDT || cur().type == BYTET)
+				emit_global_data(1);
+			else
+				skip_fn_body();
+		} else if (cur().type == WORDT || cur().type == BYTET) {
+			emit_global_data(0);
+		} else if (cur().type == FNT) {
+			adv();
+			skip_fn_body();
+		} else {
+			adv();
+		}
+	}
+	emit_strings();
+
+	/* second pass: emit functions in .text */
+	current = 0;
 	out("\t.text\n");
 	while (cur().type != EOFT) {
 		if (cur().type == NEWT) {
@@ -1124,19 +1327,14 @@ void codegen(int fd)
 			if (cur().type == FNT) {
 				adv();
 				emit_function(1);
-			} else if (cur().type == WORDT || cur().type == BYTET) {
-				emit_global_data(1);
 			} else {
-				fatal(USER_ERR, NULL, "Expected fn, word, or byte after pub");
+				adv();
 			}
 		} else if (cur().type == FNT) {
 			adv();
 			emit_function(0);
-		} else if (cur().type == WORDT || cur().type == BYTET) {
-			emit_global_data(0);
 		} else {
-			fatal(USER_ERR, NULL, "Expected function or global declaration");
+			adv();
 		}
 	}
-	emit_strings();
 }

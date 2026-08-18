@@ -10,7 +10,7 @@ pub fn main {
 	printf("d: %d\n", d);
 
 	word l;
-	for l = 0; l < 2; l = l + 1
+	for l = 0; l < 2; l++
 		printf("f[%d]: %d\n", l, f[l]);
 
 	word x = 10;
@@ -23,11 +23,11 @@ pub fn main {
 	word i = 0;
 	while i < 3 {
 		printf("i: %d\n", i);
-		i = i + 1;
+		i++;
 	}
 
 	word j;
-	for j = 0; j < 3; j = j + 1 {
+	for j = 0; j < 3; j++ {
 		printf("j: %d\n", j);
 	}
 

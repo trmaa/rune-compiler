@@ -5,6 +5,7 @@
  */
 
 #include <stddef.h>
+#include <string.h>
 #include <stdbool.h>
 #include "debug.h"
 #include "tokenizer.h"
@@ -59,7 +60,6 @@ void tokenize(char *src)
 		/* identifiers / keywords */
 		if (is_alpha(src[i])) {
 			start = &src[i];
-			len;
 			while (is_alnum(src[i]))
 				i++;
 			len = (int)(&src[i] - start);
@@ -174,10 +174,25 @@ void tokenize(char *src)
 		case ')': add_token(RPAREN, &src[i], 1); i++; continue;
 		case ',': add_token(COMMAT, &src[i], 1); i++; continue;
 		case ';': add_token(SEMIT, &src[i], 1); i++; continue;
-		case '+': add_token(PLUST, &src[i], 1); i++; continue;
-		case '-': add_token(MINUST, &src[i], 1); i++; continue;
-		case '*': add_token(START, &src[i], 1); i++; continue;
-		case '/': add_token(SLASHT, &src[i], 1); i++; continue;
+		case '+':
+			if (src[i+1] == '+') { add_token(PLUSPLUS, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(PLUSEQ, &src[i], 2); i += 2; }
+			else { add_token(PLUST, &src[i], 1); i++; }
+			continue;
+		case '-':
+			if (src[i+1] == '-') { add_token(MINUSMINUS, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(MINUSEQ, &src[i], 2); i += 2; }
+			else { add_token(MINUST, &src[i], 1); i++; }
+			continue;
+		case '*':
+			if (src[i+1] == '=') { add_token(STAREQ, &src[i], 2); i += 2; }
+			else { add_token(START, &src[i], 1); i++; }
+			continue;
+		case '/':
+			if (src[i+1] == '=') { add_token(SLASHEQ, &src[i], 2); i += 2; }
+			else { add_token(SLASHT, &src[i], 1); i++; }
+			continue;
+		case '%': add_token(MODT, &src[i], 1); i++; continue;
 		case '=':
 			if (src[i+1] == '=') { add_token(EQT, &src[i], 2); i += 2; }
 			else { add_token(EQUALT, &src[i], 1); i++; }
