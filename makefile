@@ -17,7 +17,7 @@ src = $(srcc) $(srcs)
 objd = obj
 obj = $(srcc:$(srcd)/%.c=$(objd)/%.o) $(srcs:$(srcd)/%.s=$(objd)/%.o)
 
-out = zc
+out = rc
 
 all: $(out)
 
@@ -27,7 +27,7 @@ $(out): $(obj)
 # esta parte >/dev/null 2>&1 para pipear less mas limpio
 debug:
 	@cc $(src) -o $@ $(ccf) $(ldf) -DDEBUG
-	@./debug examples/test.z 2>&1 >/dev/null
+	@./debug examples/test.ru 2>&1 >/dev/null
 	@rm debug
 
 install:

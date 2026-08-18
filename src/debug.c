@@ -11,14 +11,14 @@
 
 void say_version()
 {
-	printf("zc (zlang compiler) v%s\n", VERSION);
+	printf("rc (rune compiler) v%s\n", VERSION);
 	printf("Copyright (c) 2026 %s\n", AUTHOR);
 	printf("License: GPL\n");
 }
 
 void help()
 {
-	printf("Usage: zc [options] [file.zc]\n");
+	printf("Usage: rc [options] [file.ru]\n");
 	printf("Options:\n");
 	printf("\t-h print this text.\n");
 	printf("\t-v show the version.\n");

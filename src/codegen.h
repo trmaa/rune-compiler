@@ -12,9 +12,13 @@
 #define MAX_STRINGS 64
 #define MAX_STR_LEN 256
 
+#define TYPE_WORD 0
+#define TYPE_BYTE 1
+
 struct global_var {
 	char *name;
 	int name_len;
+	int type;
 	int is_array;
 	int array_size;
 	int has_init;
@@ -25,6 +29,7 @@ struct global_var {
 struct local_var {
 	char *name;
 	int name_len;
+	int type;
 	int offset;
 };
 

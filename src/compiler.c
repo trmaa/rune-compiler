@@ -51,10 +51,10 @@ get_paths(const char *path, char *src, char *out)
 {
 	int len = strlen(path);
 
-	if (strcmp(&path[len-2], ".z"))
-		fatal(USER_ERR, NULL, "%s is not a .z file!", path);
+	if (strcmp(&path[len-3], ".ru"))
+		fatal(USER_ERR, NULL, "%s is not a .ru file!", path);
 
 	strcpy(src, path);
 	strcpy(out, path);
-	strcpy(&out[len-2], ".s");
+	strcpy(&out[len-3], ".s");
 }

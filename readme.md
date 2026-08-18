@@ -1,12 +1,14 @@
-# zlang compiler (ZC)
+# rune compiler (RC)
+
+It is a small compiler to create binaries in very old computers.
 
 ## Specs
 
-All variables are of size word: 32-bit. No data types.
+There are two data types: word, and byte.
 
-Input: .z file, Output: x86-i386 AT&T .s file.
+Input: .ru file, Output: x86-i386 AT&T .s file.
 
-Variables outside of any scope are stored in .data.
+Variables outside of any scope, and strings are stored in .data.
 
 Variables in a scope are stored in this way:
 
@@ -49,11 +51,11 @@ The outputed assembly code uses libc, so this code:
 ```c
 // file.z
 
-let glob = 67;
-let arr[10];
+word glob = 67;
+word arr[10];
 
 pub fn main {
-	let res = glob;
+	word res = glob;
 
 	foo();
 
