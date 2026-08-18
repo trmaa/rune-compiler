@@ -1,0 +1,34 @@
+#! /usr/bin/env bash
+
+main() {
+	local files=*.ru
+
+	for f in $files; do
+		echo -n "Compiling $f..."
+
+		local i=${f//.ru/.s}
+		local o=${f//.ru/.o}
+
+		if [[ ! -f $i ]]; then
+			echo -e "\e[31m\n$f wasn't compiled\e[0m" >&2
+			exit 1
+		fi
+
+		if ! as --32 $i -o $o; then
+			echo -e "\e[31m\n$f didn't compile right\e[0m" >&2
+			exit 1
+		fi
+
+		local bin=${o//.o/}
+		if ! cc -m32 -no-pie $o -o $bin; then
+			echo -e "\e[31m\n$f didn't link right\e[0m" >&2
+			exit 1
+		fi
+
+		echo OK
+	done
+
+	echo 'Ready to test!'
+}
+
+main

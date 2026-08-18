@@ -1,0 +1,6 @@
+#! /usr/bin/env bash
+
+./rc tests/*.ru 2>&1 >/dev/null
+cd tests
+./comp-tests
+cd ..

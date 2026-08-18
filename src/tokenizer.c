@@ -1,9 +1,11 @@
-/* tokenizer.c
+/*
+ * tokenizer.c
  * tokenizer module for zc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */
 
+#include <stdio.h>
 #include <stddef.h>
 #include <string.h>
 #include <stdbool.h>
@@ -64,10 +66,14 @@ void tokenize(char *src)
 				i++;
 			len = (int)(&src[i] - start);
 
-			if (len == 4 && !memcmp(start, "word", 4))
-				add_token(WORDT, start, len);
-			else if (len == 4 && !memcmp(start, "byte", 4))
-				add_token(BYTET, start, len);
+			if (len == 4 && !memcmp(start, "let", 4))
+				add_token(SETWT, start, len);
+			else if (len == 4 && !memcmp(start, "leb", 4))
+				add_token(SETBT, start, len);
+			else if (len == 4 && !memcmp(start, "setw", 4))
+				add_token(SETWT, start, len);
+			else if (len == 4 && !memcmp(start, "setb", 4))
+				add_token(SETBT, start, len);
 			else if (len == 3 && !memcmp(start, "pub", 3))
 				add_token(PUBT, start, len);
 			else if (len == 2 && !memcmp(start, "fn", 2))
@@ -83,7 +89,7 @@ void tokenize(char *src)
 			else if (len == 3 && !memcmp(start, "for", 3))
 				add_token(FORT, start, len);
 			else
-				add_token(IDENTT, start, len);
+				add_token(IDT, start, len);
 			continue;
 		}
 
@@ -102,7 +108,7 @@ void tokenize(char *src)
 				while (is_digit(src[i]))
 					i++;
 			}
-			add_token(NUMT, start, (int)(&src[i] - start));
+			add_token(INTT, start, (int)(&src[i] - start));
 			continue;
 		}
 
@@ -160,67 +166,75 @@ void tokenize(char *src)
 			}
 			i++; /* skip closing ' */
 			sprintf(charbuf[token_count], "%d", (int)(unsigned char)val);
-			add_token(CHARLITT, charbuf[token_count], strlen(charbuf[token_count]));
+			add_token(CHART, charbuf[token_count], strlen(charbuf[token_count]));
 			continue;
 		}
 
 		/* tokens */
 		switch (src[i]) {
-		case '[': add_token(LBRAT, &src[i], 1); i++; continue;
-		case ']': add_token(RBRAT, &src[i], 1); i++; continue;
-		case '{': add_token(LBRAC, &src[i], 1); i++; continue;
-		case '}': add_token(RBRAC, &src[i], 1); i++; continue;
-		case '(': add_token(LPAREN, &src[i], 1); i++; continue;
-		case ')': add_token(RPAREN, &src[i], 1); i++; continue;
-		case ',': add_token(COMMAT, &src[i], 1); i++; continue;
+		case '[': add_token(LBCT, &src[i], 1); i++; continue;
+		case ']': add_token(RBCT, &src[i], 1); i++; continue;
+		case '{': add_token(LBKT, &src[i], 1); i++; continue;
+		case '}': add_token(RBKT, &src[i], 1); i++; continue;
+		case '(': add_token(LPT, &src[i], 1); i++; continue;
+		case ')': add_token(RPT, &src[i], 1); i++; continue;
+		case ',': add_token(COMT, &src[i], 1); i++; continue;
 		case ';': add_token(SEMIT, &src[i], 1); i++; continue;
 		case '+':
-			if (src[i+1] == '+') { add_token(PLUSPLUS, &src[i], 2); i += 2; }
-			else if (src[i+1] == '=') { add_token(PLUSEQ, &src[i], 2); i += 2; }
-			else { add_token(PLUST, &src[i], 1); i++; }
+			if (src[i+1] == '+') { add_token(INCT, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(ADDIT, &src[i], 2); i += 2; }
+			else { add_token(ADDT, &src[i], 1); i++; }
 			continue;
 		case '-':
-			if (src[i+1] == '-') { add_token(MINUSMINUS, &src[i], 2); i += 2; }
-			else if (src[i+1] == '=') { add_token(MINUSEQ, &src[i], 2); i += 2; }
-			else { add_token(MINUST, &src[i], 1); i++; }
+			if (src[i+1] == '-') { add_token(DECT, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(SUBIT, &src[i], 2); i += 2; }
+			else { add_token(SUBT, &src[i], 1); i++; }
 			continue;
 		case '*':
-			if (src[i+1] == '=') { add_token(STAREQ, &src[i], 2); i += 2; }
-			else { add_token(START, &src[i], 1); i++; }
+			if (src[i+1] == '=') { add_token(MULIT, &src[i], 2); i += 2; }
+			else { add_token(MULT, &src[i], 1); i++; }
 			continue;
 		case '/':
-			if (src[i+1] == '=') { add_token(SLASHEQ, &src[i], 2); i += 2; }
-			else { add_token(SLASHT, &src[i], 1); i++; }
+			if (src[i+1] == '=') { add_token(DIVIT, &src[i], 2); i += 2; }
+			else { add_token(DIVT, &src[i], 1); i++; }
 			continue;
 		case '%': add_token(MODT, &src[i], 1); i++; continue;
 		case '=':
-			if (src[i+1] == '=') { add_token(EQT, &src[i], 2); i += 2; }
-			else { add_token(EQUALT, &src[i], 1); i++; }
+			if (src[i+1] == '=') { add_token(EQQT, &src[i], 2); i += 2; }
+			else { add_token(EQT, &src[i], 1); i++; }
 			continue;
 		case '!':
-			if (src[i+1] == '=') { add_token(NEQ, &src[i], 2); i += 2; }
-			else { add_token(BANG, &src[i], 1); i++; }
+			if (src[i+1] == '=') { add_token(NOTIT, &src[i], 2); i += 2; }
+			else { add_token(NOTT, &src[i], 1); i++; }
 			continue;
 		case '<':
-			if (src[i+1] == '<') { add_token(LSHIFTT, &src[i], 2); i += 2; }
+			if (src[i+1] == '<') { add_token(SLT, &src[i], 2); i += 2; }
 			else if (src[i+1] == '=') { add_token(LET, &src[i], 2); i += 2; }
 			else { add_token(LTT, &src[i], 1); i++; }
 			continue;
 		case '>':
-			if (src[i+1] == '>') { add_token(RSHIFTT, &src[i], 2); i += 2; }
+			if (src[i+1] == '>') { add_token(SRT, &src[i], 2); i += 2; }
 			else if (src[i+1] == '=') { add_token(GET, &src[i], 2); i += 2; }
 			else { add_token(GTT, &src[i], 1); i++; }
 			continue;
 		case '&':
-			if (src[i+1] == '&') { add_token(AMPAMP, &src[i], 2); i += 2; }
-			else { add_token(AMP, &src[i], 1); i++; }
+			if (src[i+1] == '&') { add_token(ANDT, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(BANDIT, &src[i], 2); i += 2; }
+			else { add_token(BANDT, &src[i], 1); i++; }
 			continue;
 		case '|':
-			if (src[i+1] == '|') { add_token(PIPEPIPE, &src[i], 2); i += 2; }
-			else { add_token(PIPE, &src[i], 1); i++; }
+			if (src[i+1] == '|') { add_token(ORT, &src[i], 2); i += 2; }
+			else if (src[i+1] == '=') { add_token(BORIT, &src[i], 2); i += 2; }
+			else { add_token(BORT, &src[i], 1); i++; }
 			continue;
-		case '^': add_token(CARET, &src[i], 1); i++; continue;
-		case '~': add_token(TILDE, &src[i], 1); i++; continue;
+		case '^':
+			if (src[i+1] == '=') { add_token(XORIT, &src[i], 2); i += 2; }
+			else { add_token(XORT, &src[i], 1); i++; }
+			continue;
+		case '~':
+			if (src[i+1] == '=') { add_token(BNOTIT, &src[i], 2); i += 2; }
+			else { add_token(BNOTT, &src[i], 1); i++; }
+			continue;
 		}
 
 		fatal(USER_ERR, NULL, "Unexpected character '%c'", src[i]);
@@ -263,10 +277,19 @@ hex_val(char c)
 static void
 add_token(enum token_type type, char *start, int length)
 {
+	int i;
+
 	if (token_count >= MAX_TOKENS)
 		fatal(OS_ERR, NULL, "Too many tokens");
 	tokens[token_count].type = type;
 	tokens[token_count].start = start;
 	tokens[token_count].length = length;
 	token_count++;
+
+#ifdef DEBUG
+	debug("Tokenized -> %d", type);
+	for (i = 0; i < length; i++)
+		fprintf(stderr, "%c", start[i]);
+	fprintf(stderr, "\n");
+#endif
 }

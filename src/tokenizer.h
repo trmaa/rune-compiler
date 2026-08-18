@@ -1,4 +1,5 @@
-/* tokenizer.h
+/*
+ * tokenizer.h
  * tokenizer module for zc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
@@ -12,23 +13,34 @@
 #define MAX_TOKENS 1024
 
 enum token_type {
-	WORDT, BYTET, PUBT, FNT, RETT,
+	/* data types - and declarations */
+	SETWT, SETBT,
+	PUBT, FNT, IDT, EQT,
+	/* literals */
+	STRT, INTT, CHART,
+	/* symbols */
+	LPT, RPT,
+	LBCT, RBCT,
+	LBKT, RBKT,
+	COMT, DOTT, SEMIT,
+	/* cmp */
+	LTT, GTT,
+	LET, GET,
+	EQQT,
+	/* logic */
+	NOTT, ANDT, ORT,
+	BNOTT, BANDT, BORT, XORT,
+	NOTIT, BNOTIT, BANDIT, BORIT, XORIT,
+	SLT, SRT,
+	/* aritm */
+	ADDT, SUBT, ADDIT, SUBIT,
+	INCT, DECT,
+	MULT, DIVT, MODT, MULIT, DIVIT,
+	/* white space */
+	NEWT, EOFT,
+	/* built-ins */
+	ARGT, RETT,
 	IFT, ELSET, WHILET, FORT,
-	IDENTT, NUMT, STRT, CHARLITT,
-	LBRAT, RBRAT,
-	LBRAC, RBRAC,
-	LPAREN, RPAREN,
-	COMMAT, EQUALT, SEMIT, NEWT,
-	LTT, GTT, EQT, NEQ, LET, GET,
-	LSHIFTT, RSHIFTT,
-	PLUST, MINUST, START, SLASHT,
-	AMP, PIPE, CARET,
-	TILDE, BANG,
-	AMPAMP, PIPEPIPE,
-	PLUSPLUS, MINUSMINUS,
-	PLUSEQ, MINUSEQ, STAREQ, SLASHEQ,
-	MODT,
-	EOFT
 };
 
 struct token {

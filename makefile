@@ -19,16 +19,17 @@ obj = $(srcc:$(srcd)/%.c=$(objd)/%.o) $(srcs:$(srcd)/%.s=$(objd)/%.o)
 
 out = rc
 
+.PHONY: all debug clean install
+
 all: $(out)
 
 $(out): $(obj)
 	cc $^ -o $@ $(ldf)
 
-# esta parte >/dev/null 2>&1 para pipear less mas limpio
 debug:
 	@cc $(src) -o $@ $(ccf) $(ldf) -DDEBUG
-	@./debug examples/test.ru 2>&1 >/dev/null
-	@rm debug
+	@./$@ $(f) 2>&1 >/dev/null | less -R
+	@rm $@
 
 install:
 	cp $(out) /usr/bin

@@ -1,0 +1,20 @@
+#! /usr/bin/env bash
+
+main() {
+	local files=*.ru
+
+	for f in $files; do
+		local i=${f//.ru/.s}
+		local o=${f//.ru/.o}
+
+		if [[ -f $i ]]; then
+			rm $i
+		fi
+
+		if [[ -f $o ]]; then
+			rm $o
+		fi
+	done
+}
+
+main

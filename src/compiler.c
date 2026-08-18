@@ -1,4 +1,5 @@
-/* compiler.c
+/*
+ * compiler.c
  * compiler orchestrator for zc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
@@ -11,7 +12,6 @@
 #include <unistd.h>
 #include "debug.h"
 #include "tokenizer.h"
-#include "codegen.h"
 
 static void get_paths(const char *path, char *src, char *out);
 
@@ -41,7 +41,7 @@ void compile(const char *path)
 
 	ofd = open(opt, O_CREAT | O_WRONLY | O_TRUNC, 0644);
 
-	codegen(ofd);
+	/* rest of steps */
 
 	close(ofd);
 }
