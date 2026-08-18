@@ -1,5 +1,6 @@
-/* main.c
- * CLI entry point for zc
+/*
+ * main.c
+ * CLI entry point for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */

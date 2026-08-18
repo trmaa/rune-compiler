@@ -16,7 +16,7 @@ See examples at tests/.
 
 ```console
 $ make # compile source into ./rc
-$ make debug f=file.ru # see all debug logs of rc after compiling file.ru
+$ make debug f=file.rn # see all debug logs of rc after compiling file.rn
 $ make install # install the compiler
 ```
 
@@ -24,11 +24,11 @@ $ make install # install the compiler
 
 ```console
 $ ./rc -help
-Usage: rc [options] [file.ru]
+Usage: rc [options] [file.rn]
 Options:
         -h print this text.
         -v show the version.
-$ ./rc file.ru # compiles file.ru into file.s
+$ ./rc file.rn # compiles file.rn into file.s
 $ as --32 file.s -o file.o # assembles the file
 $ cc -m32 -no-pie file.o # links the binarie with libc and outputs a program
 $ ./a.out # run the program
@@ -38,7 +38,7 @@ $ ./a.out # run the program
 
 There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-).
 
-Input: .ru file, Output: x86-i386 AT&T .s file.
+Input: .rn file, Output: x86-i386 AT&T .s file.
 
 Variables outside of any scope, and strings are stored in .data.
 
@@ -81,7 +81,7 @@ called:
 The outputed assembly code uses libc, so this code:
 
 ```rust
-// file.ru
+// file.rn
 
 setw glob = 67;
 setw arr[10];

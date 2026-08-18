@@ -1,6 +1,6 @@
 /*
  * compiler.c
- * compiler orchestrator for zc
+ * compiler orchestrator for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */
@@ -51,8 +51,8 @@ get_paths(const char *path, char *src, char *out)
 {
 	int len = strlen(path);
 
-	if (strcmp(&path[len-3], ".ru"))
-		fatal(USER_ERR, NULL, "%s is not a .ru file!", path);
+	if (strcmp(&path[len-3], ".rn"))
+		fatal(USER_ERR, NULL, "%s is not a .rn file!", path);
 
 	strcpy(src, path);
 	strcpy(out, path);

@@ -1,5 +1,6 @@
-/* globals.h
- * global extern declarations for zc
+/*
+ * globals.h
+ * global extern declarations for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */

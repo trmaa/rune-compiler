@@ -1,5 +1,6 @@
-/* debug.h
- * debug and error utilities for zc
+/*
+ * debug.h
+ * debug and error utilities for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */

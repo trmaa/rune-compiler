@@ -1,5 +1,6 @@
-/* debug.c
- * debug and error utilities for zc
+/*
+ * debug.c
+ * debug and error utilities for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */
@@ -18,7 +19,7 @@ void say_version()
 
 void help()
 {
-	printf("Usage: rc [options] [file.ru]\n");
+	printf("Usage: rc [options] [file.rn]\n");
 	printf("Options:\n");
 	printf("\t-h print this text.\n");
 	printf("\t-v show the version.\n");

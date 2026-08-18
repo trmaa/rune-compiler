@@ -1,6 +1,6 @@
 /*
  * tokenizer.h
- * tokenizer module for zc
+ * tokenizer module for rc
  * Copyright (c) 2026 Pablo Trik Marin
  * License: GPL
  */
