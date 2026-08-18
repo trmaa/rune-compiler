@@ -8,7 +8,6 @@ ccf += -Wno-builtin-declaration-mismatch
 ldf = -m32 -no-pie
 
 srcd = src
-scrd = scripts
 
 srcc = $(wildcard $(srcd)/*.c)
 srcs = $(wildcard $(srcd)/*.s)
@@ -36,6 +35,7 @@ install:
 
 clean: $(objd)
 	rm -r $<
+	rm $(out)
 
 $(objd):
 	mkdir $(objd)
