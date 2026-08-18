@@ -10,9 +10,8 @@ pub fn main {
 	printf("d: %d\n", d);
 
 	word l;
-	for l = 0; l < 2; l = l + 1 {
+	for l = 0; l < 2; l = l + 1
 		printf("f[%d]: %d\n", l, f[l]);
-	}
 
 	word x = 10;
 	if x > 5 {

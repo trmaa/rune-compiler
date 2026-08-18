@@ -39,6 +39,10 @@ static void emit_assignment(void);
 static void emit_if(void);
 static void emit_while(void);
 static void emit_for(void);
+static void emit_stmt(void);
+static void emit_body_or_stmt(void);
+static void skip_stmt(void);
+static void skip_body_or_stmt(void);
 
 static struct token
 cur(void)
@@ -180,6 +184,122 @@ skip_expr(void)
 	while (get_prec(cur().type) > 0) {
 		adv();
 		skip_expr();
+	}
+}
+
+/*
+ * Skips a single statement without generating code.
+ * Used by the first pass to calculate stack sizes.
+ */
+static void
+skip_stmt(void)
+{
+	if (cur().type == WORDT || cur().type == BYTET) {
+		int vtype = (cur().type == WORDT) ? TYPE_WORD : TYPE_BYTE;
+		adv();
+		adv(); /* name */
+		if (cur().type == LBRAT) {
+			adv();
+			if (cur().type == NUMT)
+				adv();
+			expect(RBRAT);
+			if (cur().type == EQUALT) {
+				adv();
+				while (cur().type != RBRAC)
+					adv();
+				expect(RBRAC);
+			}
+		} else if (cur().type == EQUALT) {
+			adv();
+			skip_expr();
+		}
+		expect(SEMIT);
+	} else if (cur().type == IFT) {
+		adv();
+		skip_expr();
+		skip_body_or_stmt();
+		while (cur().type == NEWT)
+			adv();
+		if (cur().type == ELSET) {
+			adv();
+			skip_body_or_stmt();
+		}
+	} else if (cur().type == WHILET) {
+		adv();
+		skip_expr();
+		skip_body_or_stmt();
+	} else if (cur().type == FORT) {
+		adv();
+		/* init */
+		if (cur().type == WORDT || cur().type == BYTET) {
+			adv();
+			adv();
+			if (cur().type == EQUALT) {
+				adv();
+				skip_expr();
+			}
+			expect(SEMIT);
+		} else if (cur().type == IDENTT && peek(1).type == EQUALT) {
+			adv();
+			adv();
+			skip_expr();
+			expect(SEMIT);
+		} else {
+			expect(SEMIT);
+		}
+		/* condition */
+		skip_expr();
+		expect(SEMIT);
+		/* skip update and body */
+		while (cur().type != LBRAC && cur().type != NEWT)
+			adv();
+		skip_body_or_stmt();
+	} else if (cur().type == RETT) {
+		adv();
+		if (cur().type != SEMIT)
+			skip_expr();
+		expect(SEMIT);
+	} else if (cur().type == IDENTT) {
+		adv();
+		if (cur().type == LPAREN) {
+			adv();
+			while (cur().type != RPAREN) {
+				if (match(COMMAT))
+					continue;
+				adv();
+			}
+			expect(RPAREN);
+		} else if (cur().type == EQUALT) {
+			adv();
+			skip_expr();
+		}
+		expect(SEMIT);
+	} else {
+		fatal(USER_ERR, NULL, "Unexpected token in skip_stmt");
+	}
+}
+
+/*
+ * Skips a body: either a braced block or a single-line statement.
+ */
+static void
+skip_body_or_stmt(void)
+{
+	if (cur().type == LBRAC) {
+		adv();
+		while (cur().type != RBRAC) {
+			if (cur().type == NEWT) {
+				adv();
+				continue;
+			}
+			skip_stmt();
+		}
+		expect(RBRAC);
+	} else if (cur().type == NEWT) {
+		adv();
+		skip_stmt();
+	} else {
+		fatal(USER_ERR, NULL, "Expected '{' or newline in skip");
 	}
 }
 
@@ -372,13 +492,43 @@ emit_unary(void)
  * Parses a primary expression: number or variable.
  * Result left in %eax.
  */
+static int
+parse_num(const char *s, int len)
+{
+	int val = 0;
+	const char *end = s + len;
+
+	if (s[0] == '0' && len > 1 && (s[1] == 'x' || s[1] == 'X')) {
+		s += 2;
+		while (s < end) {
+			val *= 16;
+			if (*s >= '0' && *s <= '9') val += *s - '0';
+			else if (*s >= 'a' && *s <= 'f') val += *s - 'a' + 10;
+			else if (*s >= 'A' && *s <= 'F') val += *s - 'A' + 10;
+			s++;
+		}
+	} else if (s[0] == '0' && len > 1 && (s[1] == 'b' || s[1] == 'B')) {
+		s += 2;
+		while (s < end) {
+			val = val * 2 + (*s - '0');
+			s++;
+		}
+	} else {
+		while (s < end) {
+			val = val * 10 + (*s - '0');
+			s++;
+		}
+	}
+	return val;
+}
+
 static void
 emit_primary(void)
 {
 	int idx;
 
 	if (cur().type == NUMT || cur().type == CHARLITT) {
-		out("\tmov\t$%d, %%eax\n", atoi(cur().start));
+		out("\tmov\t$%d, %%eax\n", parse_num(cur().start, cur().length));
 		adv();
 		return;
 	}
@@ -450,18 +600,17 @@ emit_if(void)
 	out("\tcmp\t$0, %%eax\n");
 	out("\tje\t.L%d\n", my_label);
 
-	expect(LBRAC);
-	emit_body();
-	expect(RBRAC);
+	emit_body_or_stmt();
+
+	while (cur().type == NEWT)
+		adv();
 
 	if (cur().type == ELSET) {
 		int else_label = label_count++;
 		out("\tjmp\t.L%d\n", else_label);
 		out(".L%d:\n", my_label);
 		adv();
-		expect(LBRAC);
-		emit_body();
-		expect(RBRAC);
+		emit_body_or_stmt();
 		out(".L%d:\n", else_label);
 	} else {
 		out(".L%d:\n", my_label);
@@ -485,9 +634,7 @@ emit_while(void)
 	out("\tcmp\t$0, %%eax\n");
 	out("\tje\t.L%d\n", end_label);
 
-	expect(LBRAC);
-	emit_body();
-	expect(RBRAC);
+	emit_body_or_stmt();
 
 	out("\tjmp\t.L%d\n", loop_label);
 	out(".L%d:\n", end_label);
@@ -525,19 +672,17 @@ emit_for(void)
 
 	/* save update tokens position */
 	update_start = current;
-	while (cur().type != LBRAC)
+	while (cur().type != LBRAC && cur().type != NEWT)
 		adv();
-	/* cur() is now LBRAC */
+	/* cur() is now LBRAC or NEWT */
 
-	expect(LBRAC);
-	emit_body();
-	expect(RBRAC);
+	emit_body_or_stmt();
 
 	/* emit update by temporarily restoring position */
 	{
 		int saved = current;
 		current = update_start;
-		while (cur().type != LBRAC) {
+		while (cur().type != LBRAC && cur().type != NEWT) {
 			if (cur().type == IDENTT && peek(1).type == EQUALT) {
 				char *uname = cur().start;
 				int uname_len = cur().length;
@@ -571,41 +716,73 @@ emit_for(void)
 }
 
 /*
+ * Emits a single statement.
+ */
+static void
+emit_stmt(void)
+{
+	switch (cur().type) {
+	case WORDT:
+		emit_decl(TYPE_WORD);
+		break;
+	case BYTET:
+		emit_decl(TYPE_BYTE);
+		break;
+	case IDENTT:
+		if (peek(1).type == EQUALT)
+			emit_assignment();
+		else
+			emit_call();
+		break;
+	case RETT:
+		emit_ret();
+		break;
+	case IFT:
+		emit_if();
+		break;
+	case WHILET:
+		emit_while();
+		break;
+	case FORT:
+		emit_for();
+		break;
+	default:
+		fatal(USER_ERR, NULL, "Unexpected token in body");
+	}
+}
+
+/*
  * Emits a block of statements until a closing brace is found.
- * Used by if, while, and for to emit their bodies.
+ * Used by emit_body_or_stmt when a '{' is encountered.
  */
 static void
 emit_body(void)
 {
 	while (cur().type != RBRAC) {
-		switch (cur().type) {
-		case WORDT:
-			emit_decl(TYPE_WORD);
-			break;
-		case BYTET:
-			emit_decl(TYPE_BYTE);
-			break;
-		case IDENTT:
-			if (peek(1).type == EQUALT)
-				emit_assignment();
-			else
-				emit_call();
-			break;
-		case RETT:
-			emit_ret();
-			break;
-		case IFT:
-			emit_if();
-			break;
-		case WHILET:
-			emit_while();
-			break;
-		case FORT:
-			emit_for();
-			break;
-		default:
-			fatal(USER_ERR, NULL, "Unexpected token in function body");
+		if (cur().type == NEWT) {
+			adv();
+			continue;
 		}
+		emit_stmt();
+	}
+}
+
+/*
+ * Emits either a braced block or a single-line statement.
+ * Used by if, while, and for to emit their bodies.
+ */
+static void
+emit_body_or_stmt(void)
+{
+	if (cur().type == LBRAC) {
+		adv();
+		emit_body();
+		expect(RBRAC);
+	} else if (cur().type == NEWT) {
+		adv();
+		emit_stmt();
+	} else {
+		fatal(USER_ERR, NULL, "Expected '{' or newline");
 	}
 }
 
@@ -648,7 +825,7 @@ emit_global_data(int pub)
 			globals[global_count].is_array = 0;
 			globals[global_count].array_size = 0;
 			globals[global_count].has_init = 1;
-			globals[global_count].init_val = atoi(cur().start);
+			globals[global_count].init_val = parse_num(cur().start, cur().length);
 			adv();
 			expect(SEMIT);
 			out("%.*s:\n", globals[global_count].name_len, globals[global_count].name);
@@ -724,6 +901,10 @@ emit_function(int pub)
 
 	/* first pass: calculate stack size and build locals table */
 	while (cur().type != RBRAC) {
+		if (cur().type == NEWT) {
+			adv();
+			continue;
+		}
 		if (cur().type == WORDT || cur().type == BYTET) {
 			int vtype;
 			char *lname;
@@ -772,62 +953,8 @@ emit_function(int pub)
 				local_count++;
 				expect(SEMIT);
 			}
-		} else if (cur().type == RETT) {
-			adv();
-			if (cur().type != SEMIT)
-				skip_expr();
-			expect(SEMIT);
-		} else if (cur().type == IDENTT) {
-			adv();
-			if (cur().type == LPAREN) {
-				adv();
-				while (cur().type != RPAREN) {
-					if (match(COMMAT))
-						continue;
-					adv();
-				}
-				expect(RPAREN);
-				expect(SEMIT);
-			} else if (cur().type == EQUALT) {
-				adv();
-				skip_expr();
-				expect(SEMIT);
-			} else {
-				expect(SEMIT);
-			}
-		} else if (cur().type == IFT) {
-			adv();
-			while (cur().type != LBRAC)
-				adv();
-			expect(LBRAC);
-			while (cur().type != RBRAC)
-				adv();
-			expect(RBRAC);
-			if (cur().type == ELSET) {
-				adv();
-				expect(LBRAC);
-				while (cur().type != RBRAC)
-					adv();
-				expect(RBRAC);
-			}
-		} else if (cur().type == WHILET) {
-			adv();
-			while (cur().type != LBRAC)
-				adv();
-			expect(LBRAC);
-			while (cur().type != RBRAC)
-				adv();
-			expect(RBRAC);
-		} else if (cur().type == FORT) {
-			adv();
-			while (cur().type != LBRAC)
-				adv();
-			expect(LBRAC);
-			while (cur().type != RBRAC)
-				adv();
-			expect(RBRAC);
 		} else {
-			adv();
+			skip_stmt();
 		}
 	}
 
@@ -988,6 +1115,10 @@ void codegen(int fd)
 	out("\t.data\n");
 	out("\t.text\n");
 	while (cur().type != EOFT) {
+		if (cur().type == NEWT) {
+			adv();
+			continue;
+		}
 		if (cur().type == PUBT) {
 			adv();
 			if (cur().type == FNT) {

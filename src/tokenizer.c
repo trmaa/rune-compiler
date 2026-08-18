@@ -35,9 +35,17 @@ void tokenize(char *src)
 
 	while (src[i] != '\0') {
 		/* whitespace */
-		if (src[i] == ' ' || src[i] == '\t' ||
-		    src[i] == '\n' || src[i] == '\r') {
+		if (src[i] == ' ' || src[i] == '\t') {
 			i++;
+			continue;
+		}
+
+		/* newlines (collapse consecutive into one NEWT) */
+		if (src[i] == '\n' || src[i] == '\r') {
+			i++;
+			while (src[i] == '\n' || src[i] == '\r')
+				i++;
+			add_token(NEWT, &src[i - 1], 1);
 			continue;
 		}
 
@@ -82,8 +90,18 @@ void tokenize(char *src)
 		/* numbers */
 		if (is_digit(src[i])) {
 			start = &src[i];
-			while (is_digit(src[i]))
-				i++;
+			if (src[i] == '0' && (src[i+1] == 'x' || src[i+1] == 'X')) {
+				i += 2;
+				while (is_hex(src[i]))
+					i++;
+			} else if (src[i] == '0' && (src[i+1] == 'b' || src[i+1] == 'B')) {
+				i += 2;
+				while (src[i] == '0' || src[i] == '1')
+					i++;
+			} else {
+				while (is_digit(src[i]))
+					i++;
+			}
 			add_token(NUMT, start, (int)(&src[i] - start));
 			continue;
 		}
