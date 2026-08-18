@@ -32,7 +32,7 @@ Options:
 
 ## Specs
 
-There are two data types: setw, and byte.
+There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-).
 
 Input: .ru file, Output: x86-i386 AT&T .s file.
 
