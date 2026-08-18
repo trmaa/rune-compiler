@@ -40,7 +40,7 @@ enum token_type {
 	NEWT, EOFT,
 	/* built-ins */
 	ARGT, RETT,
-	IFT, ELSET, WHILET, FORT,
+	IFT, ELSET, WHILET, FORT
 };
 
 struct token {
