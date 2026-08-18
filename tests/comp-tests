@@ -20,7 +20,7 @@ main() {
 		fi
 
 		local bin=${o//.o/}
-		if ! cc -m32 -no-pie $o -o $bin; then
+		if ! cc -m32 -no-pie $o test-lib.o -o $bin; then
 			echo -e "\e[31m\n$f didn't link right\e[0m" >&2
 			exit 1
 		fi
