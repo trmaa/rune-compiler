@@ -9,6 +9,7 @@ See examples at tests/.
 ## Done for now
 
 - Tokenizer
+- Global variables (.data section)
 
 ## How to
 

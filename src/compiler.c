@@ -12,12 +12,14 @@
 #include <unistd.h>
 #include "debug.h"
 #include "tokenizer.h"
+#include "parser.h"
 
 static void get_paths(const char *path, char *src, char *out);
 
 void compile(const char *path)
 {
-	int ifd, ofd;
+	int ifd;
+	FILE *out;
 	char spt[32], opt[32];
 
 	char *src;
@@ -38,13 +40,13 @@ void compile(const char *path)
 	/* file loaded at src */
 
 	tokenize(src);
+
+	out = fopen(opt, "w");
+
+	parse(out);
+
+	fclose(out);
 	free(src);
-
-	ofd = open(opt, O_CREAT | O_WRONLY | O_TRUNC, 0644);
-
-	/* rest of steps */
-
-	close(ofd);
 }
 
 static void

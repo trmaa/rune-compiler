@@ -8,7 +8,7 @@
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";
-const char *VERSION = "a0.4-butterfly";
+const char *VERSION = "a0.5-firefly";
 
 /* possible const struct conf {...} CONFIG; */
 
