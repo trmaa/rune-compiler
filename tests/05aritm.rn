@@ -1,0 +1,6 @@
+pub fn main {
+	let a = 60
+	let b = 12
+	let c = a + b / 2
+	ret c
+}

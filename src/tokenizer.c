@@ -37,7 +37,6 @@ void tokenize(char *src)
 	token_count = 0;
 
 	while (src[i] != '\0') {
-		/* TODO: dot */
 		/* whitespace */
 		if (src[i] == ' ' || src[i] == '\t') {
 			i++;
