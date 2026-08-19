@@ -105,12 +105,20 @@ void tokenize(char *src)
 				i += 2;
 				while (src[i] == '0' || src[i] == '1')
 					i++;
-			} else {
+		} else {
+			while (is_digit(src[i]))
+				i++;
+			/* float literals (3.14, 0.5) */
+			if (src[i] == '.' && is_digit(src[i+1])) {
+				i++;
 				while (is_digit(src[i]))
 					i++;
+				add_token(FLOATT, start, (int)(&src[i] - start));
+				continue;
 			}
-			add_token(INTT, start, (int)(&src[i] - start));
-			continue;
+		}
+		add_token(INTT, start, (int)(&src[i] - start));
+		continue;
 		}
 
 		/* string literals */

@@ -10,6 +10,7 @@ See examples at tests/.
 
 - Tokenizer
 - Global variables (.data section)
+- Float literals (3.14) and floats in words
 
 ## How to
 
@@ -37,7 +38,7 @@ $ ./a.out # run the program
 
 ## Specs
 
-There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-).
+There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-). A word can also hold a float (32 bits).
 
 Input: .rn file, Output: x86-i386 AT&T .s file.
 

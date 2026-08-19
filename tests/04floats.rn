@@ -1,0 +1,5 @@
+setw pi = 3.14
+setw arr[3] = { 1, 2.5, 0.5 }
+setw *p = &pi
+setw half = 0.5
+setb b = 200

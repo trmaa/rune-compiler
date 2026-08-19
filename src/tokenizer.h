@@ -17,7 +17,7 @@ enum token_type {
 	SETWT, SETBT,
 	PUBT, FNT, IDT, EQT,
 	/* literals */
-	STRT, INTT, CHART,
+	STRT, INTT, FLOATT, CHART,
 	/* symbols */
 	LPT, RPT,
 	LBCT, RBCT,

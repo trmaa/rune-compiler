@@ -74,8 +74,10 @@ void parse(FILE *out)
 /*
  * Parses a global variable declaration and emits it.
  * Grammar: (setw|setb) [*] name [dims...] [= init]
- * Init can be a number, a char, an array literal, a string
+ * Init can be a number, a char, a float, an array literal, a string
  * or an address (&name). Dims are only allowed without init.
+ * Floats only fit in words, a float initializer in a setw is
+ * emitted as .float.
  */
 static void
 parse_var(enum visi vis, FILE *out)
@@ -113,22 +115,43 @@ parse_var(enum visi vis, FILE *out)
 	}
 
 	/* initializer */
-	if (is(INTT) || is(CHART)) {
+	if (is(INTT) || is(CHART) || is(FLOATT)) {
 		if (sz > 1)
 			fatal(USER_ERR, NULL, "Array with scalar initializer!");
-		emit(out, word ? "\t.long\t%d\n" : "\t.byte\t%d\n", num_val());
+		if (is(FLOATT)) {
+			if (!word)
+				fatal(USER_ERR, NULL, "Float initializer in a byte variable!");
+			emit(out, "\t.float\t%.*s\n", tokens[pos].length, tokens[pos].start);
+		} else {
+			emit(out, word ? "\t.long\t%d\n" : "\t.byte\t%d\n", num_val());
+		}
 		pos++;
 	} else if (is(LBKT)) {
-		emit(out, word ? "\t.long\t" : "\t.byte\t");
+		int flt = 0;
+		int j = pos + 1;
+
+		while (tokens[j].type != RBKT) {
+			if (tokens[j].type == FLOATT)
+				flt = 1;
+			j++;
+		}
+		if (flt && !word)
+			fatal(USER_ERR, NULL, "Float in a byte array!");
+		emit(out, flt ? "\t.float\t" : (word ? "\t.long\t" : "\t.byte\t"));
 		pos++;
 		while (!is(RBKT)) {
 			if (!first)
 				emit(out, ", ");
 			first = 0;
-			if (!is(INTT) && !is(CHART))
+			if (is(INTT) || is(CHART)) {
+				emit(out, "%d", num_val());
+				pos++;
+			} else if (is(FLOATT)) {
+				emit(out, "%.*s", tokens[pos].length, tokens[pos].start);
+				pos++;
+			} else {
 				fatal(USER_ERR, NULL, "Invalid value in array literal!");
-			emit(out, "%d", num_val());
-			pos++;
+			}
 			if (accept(COMT))
 				continue;
 			break;
@@ -188,9 +211,6 @@ emit(FILE *out, const char *fmt, ...)
 
 	va_start(args, fmt);
 	vfprintf(out, fmt, args);
-
-	debug(fmt, args);
-
 	va_end(args);
 }
 
