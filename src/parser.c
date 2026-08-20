@@ -847,7 +847,5 @@ num_val(void)
 		val = val * base + d;
 	}
 
-	/* TODO floats 0.XX... */
-
 	return val;
 }
