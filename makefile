@@ -1,3 +1,7 @@
+as = cc
+cc = cc
+ld = cc
+
 asf := -m32
 
 ccf := -m32
@@ -45,7 +49,7 @@ all: $(out)
 
 $(out): $(obj)
 	$(say) -en '\e[1;33m  LD\t$@...'
-	$(hid)cc $^ -o $@ $(ldf)
+	$(hid)$(ld) $^ -o $@ $(ldf)
 	$(say) -e 'OK\e[0m'
 
 debug:
@@ -65,10 +69,10 @@ $(objd):
 
 $(objd)/%.o: $(srcd)/%.s | $(objd)
 	$(say) -en '\e[1;36m  AS\t$@...'
-	$(hid)cc -c $< -o $@ $(asf)
+	$(hid)$(as) -c $< -o $@ $(asf)
 	$(say) -e 'OK\e[0m'
 
 $(objd)/%.o: $(srcd)/%.c | $(objd)
 	$(say) -en '\e[1;32m  CC\t$@...'
-	$(hid)cc -c $< -o $@ $(ccf)
+	$(hid)$(cc) -c $< -o $@ $(ccf)
 	$(say) -e 'OK\e[0m'

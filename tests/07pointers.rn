@@ -1,0 +1,17 @@
+let g = 10
+leb *gp = &g
+
+pub fn main {
+	let l = 20
+	let *a = &l
+	let *b
+	b = &g
+	leb **c = &gp
+	leb *d = *c
+
+	let v = *a
+	let h = gp[0]
+
+	printf("%d\n", (*c)[1])
+	printf("%d\n", *(a + 1))
+}

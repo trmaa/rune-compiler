@@ -4,13 +4,13 @@ main:
 	push	%ebp
 	mov	%esp, %ebp
 
-	mov	$4, %esp
+	sub	$4, %esp
 	mov	$60, -4(%ebp)
 
-	mov	$4, %esp
+	sub	$4, %esp
 	mov	$12, -8(%ebp)
 
-	mov	$4, %esp
+	sub	$4, %esp
 	mov	-8(%ebp), %eax
 	xor	%edx, %edx
 	mov	$2, %ebx

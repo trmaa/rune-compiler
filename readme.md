@@ -11,6 +11,8 @@ See examples at tests/.
 - Tokenizer
 - Global variables (.data section)
 - Float literals (3.14) and floats in words
+- Functions, calls and string/array literals (.text section)
+- Local variables, arithmetic expressions (with precedence) and return statements
 
 ## How to
 

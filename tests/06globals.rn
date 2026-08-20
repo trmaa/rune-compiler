@@ -1,0 +1,6 @@
+setw g = 40
+pub fn main {
+	let a = g
+	let b = g / 2
+	ret g + a - b
+}

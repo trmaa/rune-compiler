@@ -1,0 +1,26 @@
+let a
+let b
+
+// arg = { word, byte** }
+pub fn main {
+	if arg[0] < 3 {
+		printf("two args needed\n")
+		ret 1
+	}
+
+	a = atoi(arg[1][1])
+	b = atoi(arg[1][2])
+
+	if a > b
+		printf("a bigger\n")
+	else
+		printf("b bigger\n")
+
+	let i = 0
+
+	while i < 10
+		printf("%d\n", ++i)
+
+	for i = 0, i < 10, i++
+		printf("%d\n", i)
+}
