@@ -266,6 +266,41 @@ bool is_alnum(char c)
 	return is_alpha(c) || is_digit(c);
 }
 
+/*
+ * Numeric value of a literal token. Handles decimal,
+ * hexadecimal (0x..) and binary (0b..) literals.
+ */
+int
+num_val(const struct token *t)
+{
+	const char *s = t->start;
+	int len = t->length;
+	int base = 10, val = 0, i = 0;
+
+	if (len > 2 && s[0] == '0') {
+		if (s[1] == 'x' || s[1] == 'X')
+			base = 16, i = 2;
+		else if (s[1] == 'b' || s[1] == 'B')
+			base = 2, i = 2;
+	}
+
+	for (; i < len; i++) {
+		int d;
+
+		if (s[i] >= '0' && s[i] <= '9')
+			d = s[i] - '0';
+		else if (s[i] >= 'a' && s[i] <= 'f')
+			d = s[i] - 'a' + 10;
+		else if (s[i] >= 'A' && s[i] <= 'F')
+			d = s[i] - 'A' + 10;
+		else
+			break;
+		val = val * base + d;
+	}
+
+	return val;
+}
+
 static int
 is_hex(char c)
 {

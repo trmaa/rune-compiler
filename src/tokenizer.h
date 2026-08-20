@@ -52,6 +52,7 @@ struct token {
 extern struct token tokens[MAX_TOKENS];
 extern int token_count;
 
+int num_val(const struct token *t);
 bool is_alpha(char c);
 bool is_digit(char c);
 bool is_alnum(char c);

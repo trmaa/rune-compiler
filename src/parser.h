@@ -9,6 +9,24 @@
 #define PARSER_H
 
 #include <stdio.h>
+#include <stdbool.h>
+#include "tokenizer.h"
+
+enum visi {
+	PUB, PRIV
+};
+
+/* shared codegen state */
+extern int pos;
+extern FILE *code;
+extern int has_fn, data_used, str_cnt, arr_cnt;
+
+/* token walking and output helpers */
+bool is(enum token_type t);
+bool accept(enum token_type t);
+void expect(enum token_type t);
+void emit(FILE *out, const char *fmt, ...);
+void sec_data(FILE *out);
 
 void parse(FILE *out);
 
