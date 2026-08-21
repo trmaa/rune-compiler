@@ -30,7 +30,7 @@ sym_locals_clear(void)
 }
 
 void
-sym_register(int kind, char *start, int length, int off)
+sym_register(int kind, char *start, int length, int off, int is_ptr)
 {
 	if (sym_cnt >= SYM_MAX)
 		fatal(USER_ERR, NULL, "Too many variables!");
@@ -39,6 +39,7 @@ sym_register(int kind, char *start, int length, int off)
 	syms[sym_cnt].length = length;
 	syms[sym_cnt].kind = kind;
 	syms[sym_cnt].off = off;
+	syms[sym_cnt].is_ptr = is_ptr;
 	sym_cnt++;
 	if (kind == LOC)
 		loc_cnt++;

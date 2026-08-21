@@ -20,23 +20,39 @@ void say_version()
 void help()
 {
 	printf("Usage: rc [options] [file.rn]\n");
-	printf("Options:\n");
-	printf("\t-h print this text.\n");
-	printf("\t-v show the version.\n");
+	printf("Options:\t\t(opts can be one char long)\n");
+	printf("\t-debug\t\tprints extra info about the compiling process.\n");
+	printf("\t-help\t\tprint this text.\n");
+	printf("\t-silent\t\tlogs dont show up.\n");
+	printf("\t-version\tshow the version.\n");
+}
+
+void log(const char *fmt, ...)
+{
+	if (!CONFIG.silent) {
+		char buf[1024];
+		va_list args;
+
+		va_start(args, fmt);
+		vsnprintf(buf, sizeof buf, fmt, args);
+		va_end(args);
+
+		printf("%s\n", buf);
+	}
 }
 
 void debug(const char *fmt, ...)
 {
-#ifdef DEBUG
-	char buf[1024];
-	va_list args;
+	if (CONFIG.debug) {
+		char buf[1024];
+		va_list args;
 
-	va_start(args, fmt);
-	vsnprintf(buf, sizeof buf, fmt, args);
-	va_end(args);
+		va_start(args, fmt);
+		vsnprintf(buf, sizeof buf, fmt, args);
+		va_end(args);
 
-	fprintf(stderr, "\x1b[33mDebug: %s\n\x1b[0m", buf);
-#endif
+		fprintf(stderr, "\x1b[33mDebug: %s\n\x1b[0m", buf);
+	}
 }
 
 void fatal(enum err stat, void (*cb)(), const char *fmt, ...)

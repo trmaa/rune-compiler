@@ -1,0 +1,53 @@
+.TH RC 1 "August 2026" "User Commands"
+.SH NAME
+rc \- rune compiler
+.SH SYNOPSIS
+.B rc
+.RI [ options ]
+.RI [ file.rn ]
+.SH DESCRIPTION
+.B rc
+is a lightweight compiler for the Rune programming language,
+targeting x86\-i386.
+It translates
+.B .rn
+source files into x86 AT&T assembly (a
+.B .s
+file) which can then be assembled and linked into a native binary.
+.PP
+Rune resembles assembly but with variables, pointers, and loops.
+.SH OPTIONS
+.TP
+.B \-help
+Print usage information.
+.TP
+.B \-version
+Show version and copyright.
+.TP
+.B \-debug
+Print extra info about the compiling process.
+.TP
+.B \-silent
+Suppress log output.
+.SH OUTPUT
+The output file has the same name as the input with a
+.B .s
+extension (e.g.,
+.B file.rn
+produces
+.BR file.s ).
+.SH EXAMPLES
+Compile and run:
+.RS
+.nf
+$ rc file.rn
+$ cc \-m32 \-no\-pie file.s \-o file
+$ ./file
+.fi
+.RE
+.SH AUTHOR
+Pablo Trik Marin
+.SH LICENSE
+GPL
+.SH VERSION
+a0.6\-clean

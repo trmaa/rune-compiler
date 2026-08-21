@@ -29,13 +29,14 @@ parse_var(enum visi vis, FILE *out)
 {
 	bool word = is(SETWT);
 	int sz = 1;
+	int ptr;
 
 	sec_data(out);
 	expect(word ? SETWT : SETBT);
-	accept(MULT);
+	ptr = accept(MULT);
 
 	expect(IDT);
-	sym_register(GLO, tokens[pos - 1].start, tokens[pos - 1].length, 0);
+	sym_register(GLO, tokens[pos - 1].start, tokens[pos - 1].length, 0, ptr);
 	if (vis == PUB)
 		emit(out, "\t.globl\t%.*s\n", tokens[pos - 1].length, tokens[pos - 1].start);
 	emit(out, "%.*s:\n", tokens[pos - 1].length, tokens[pos - 1].start);

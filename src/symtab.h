@@ -17,11 +17,12 @@ struct sym {
 	int length;
 	int kind;
 	int off;
+	int is_ptr;
 };
 
 void sym_reset(void);
 void sym_locals_clear(void);
-void sym_register(int kind, char *start, int length, int off);
+void sym_register(int kind, char *start, int length, int off, int is_ptr);
 struct sym *sym_find(char *start, int length);
 int sym_local_count(void);
 

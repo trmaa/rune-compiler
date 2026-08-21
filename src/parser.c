@@ -98,8 +98,8 @@ void
 expect(enum token_type t)
 {
 	if (!accept(t))
-		fatal(USER_ERR, NULL, "Expected token %d but got %d!", t,
-		      tokens[pos].type);
+		fatal(USER_ERR, NULL, "Expected token %s but got %s!", t_name(t),
+		      t_name(tokens[pos].type));
 }
 
 void

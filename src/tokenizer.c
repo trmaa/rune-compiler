@@ -11,6 +11,7 @@
 #include <stdbool.h>
 #include "debug.h"
 #include "tokenizer.h"
+#include "globals.h"
 
 struct token tokens[MAX_TOKENS];
 int token_count;
@@ -88,6 +89,8 @@ void tokenize(char *src)
 				add_token(WHILET, start, len);
 			else if (len == 3 && !memcmp(start, "for", 3))
 				add_token(FORT, start, len);
+			else if (len == 3 && !memcmp(start, "arg", 3))
+				add_token(ARGT, start, len);
 			else
 				add_token(IDT, start, len);
 			continue;
@@ -104,20 +107,21 @@ void tokenize(char *src)
 				i += 2;
 				while (src[i] == '0' || src[i] == '1')
 					i++;
-		} else {
-			while (is_digit(src[i]))
-				i++;
-			/* float literals (3.14, 0.5) */
-			if (src[i] == '.' && is_digit(src[i+1])) {
-				i++;
+			} else {
 				while (is_digit(src[i]))
 					i++;
-				add_token(FLOATT, start, (int)(&src[i] - start));
-				continue;
+				/* float literals (3.14, 0.5) */
+				if (src[i] == '.' && is_digit(src[i+1])) {
+					i++;
+					while (is_digit(src[i]))
+						i++;
+					add_token(FLOATT, start, (int)(&src[i] - start));
+					continue;
+				}
 			}
-		}
-		add_token(INTT, start, (int)(&src[i] - start));
-		continue;
+
+			add_token(INTT, start, (int)(&src[i] - start));
+			continue;
 		}
 
 		/* string literals */
@@ -329,10 +333,74 @@ add_token(enum token_type type, char *start, int length)
 	tokens[token_count].length = length;
 	token_count++;
 
-#ifdef DEBUG
-	debug("Tokenized -> %d", type);
-	for (i = 0; i < length; i++)
-		fprintf(stderr, "%c", start[i]);
-	fprintf(stderr, "\n");
-#endif
+	if (CONFIG.debug) {
+		debug("Tokenized -> %s", t_name(type));
+		for (i = 0; i < length; i++)
+			fprintf(stderr, "%c", start[i]);
+		fprintf(stderr, "\n");
+	}
+}
+
+char *t_name(enum token_type t)
+{
+	switch (t) {
+	case SETWT:  return "SETW";
+	case SETBT:  return "SETB";
+	case PUBT:   return "PUB";
+	case FNT:    return "FN";
+	case IDT:    return "ID";
+	case EQT:    return "EQ";
+	case STRT:   return "STR";
+	case INTT:   return "INT";
+	case FLOATT: return "FLOAT";
+	case CHART:  return "CHAR";
+	case LPT:    return "LP";
+	case RPT:    return "RP";
+	case LBCT:   return "LBC";
+	case RBCT:   return "RBC";
+	case LBKT:   return "LBK";
+	case RBKT:   return "RBK";
+	case COMT:   return "COM";
+	case DOTT:   return "DOT";
+	case SEMIT:  return "SEMI";
+	case LTT:    return "LT";
+	case GTT:    return "GT";
+	case LET:    return "LE";
+	case GET:    return "GE";
+	case EQQT:   return "EQQ";
+	case NOTT:   return "NOT";
+	case ANDT:   return "AND";
+	case ORT:    return "OR";
+	case BNOTT:  return "BNOT";
+	case BANDT:  return "BAND";
+	case BORT:   return "BOR";
+	case XORT:   return "XOR";
+	case NOTIT:  return "NOTI";
+	case BNOTIT: return "BNOTI";
+	case BANDIT: return "BANDI";
+	case BORIT:  return "BORI";
+	case XORIT:  return "XORI";
+	case SLT:    return "SL";
+	case SRT:    return "SR";
+	case ADDT:   return "ADD";
+	case SUBT:   return "SUB";
+	case ADDIT:  return "ADDI";
+	case SUBIT:  return "SUBI";
+	case INCT:   return "INC";
+	case DECT:   return "DEC";
+	case MULT:   return "MUL";
+	case DIVT:   return "DIV";
+	case MODT:   return "MOD";
+	case MULIT:  return "MULI";
+	case DIVIT:  return "DIVI";
+	case NEWT:   return "NEW";
+	case EOFT:   return "EOF";
+	case ARGT:   return "ARG";
+	case RETT:   return "RET";
+	case IFT:    return "IF";
+	case ELSET:  return "ELSE";
+	case WHILET: return "WHILE";
+	case FORT:   return "FOR";
+	}
+	return "THIS AIN'T A TOKEN!";
 }

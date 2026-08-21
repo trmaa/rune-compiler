@@ -18,7 +18,6 @@ static char obuf[64];
 void swap(int *a, int *b);
 
 static void eval_muldiv(void);
-static void eval_atom(const char *reg);
 static int chain_end(void);
 static int atom_len(int p);
 
@@ -118,7 +117,7 @@ eval_muldiv(void)
  * variable) into the given register. Chars are emitted in
  * hexadecimal, negative literals keep their sign.
  */
-static void
+void
 eval_atom(const char *reg)
 {
 	int sign = 1;
@@ -136,11 +135,79 @@ eval_atom(const char *reg)
 		else
 			emit(code, "\tmov\t$%d, %%%s\n", num_val(&tokens[pos]), reg);
 		pos++;
+	} else if (is(ARGT)) {
+		int n;
+		pos++;
+		expect(LBCT);
+		n = num_val(&tokens[pos]);
+		pos++;
+		expect(RBCT);
+		emit(code, "\tmov\t%d(%%ebp), %%%s\n", n * 4 + 8, reg);
+		while (is(LBCT)) {
+			int idx;
+			pos++;
+			idx = num_val(&tokens[pos]);
+			pos++;
+			expect(RBCT);
+			if (idx == 0)
+				emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
+			else
+				emit(code, "\tmov\t%d(%%%s), %%%s\n", idx * 4, reg, reg);
+		}
+	} else if (is(BANDT)) {
+		pos++;
+		if (is(IDT)) {
+			struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+			pos++;
+			if (s->kind == LOC)
+				emit(code, "\tlea\t%d(%%ebp), %%%s\n", s->off, reg);
+			else
+				emit(code, "\tlea\t%.*s, %%%s\n", s->length, s->start, reg);
+		} else if (is(MULT)) {
+			pos++;
+			eval_atom(reg);
+			emit(code, "\tlea\t(%%%s), %%%s\n", reg, reg);
+		}
+	} else if (is(MULT)) {
+		pos++;
+		eval_atom(reg);
+		emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
+	} else if (is(LPT)) {
+		pos++; /* skip ( */
+		eval_muldiv();
+		while (is(ADDT) || is(SUBT)) {
+			bool add = accept(ADDT);
+			if (!add) pos++;
+			emit(code, "\tmov\t%%eax, %%ecx\n");
+			eval_muldiv();
+			if (add)
+				emit(code, "\tadd\t%%ecx, %%eax\n");
+			else
+				emit(code, "\tsub\t%%eax, %%ecx\n\tmov\t%%ecx, %%eax\n");
+		}
+		expect(RPT);
 	} else if (is(IDT)) {
 		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-
 		pos++;
-		if (s->kind == LOC)
+		if (is(LBCT) && s->is_ptr) {
+			int idx;
+			pos++;
+			idx = num_val(&tokens[pos]);
+			pos++;
+			expect(RBCT);
+			if (s->kind == LOC)
+				emit(code, "\tmov\t%d(%%ebp), %%ecx\n", s->off);
+			else {
+				emit(code, "\tpush\t%%eax\n");
+				emit(code, "\tmov\t%.*s, %%ecx\n", s->length, s->start);
+			}
+			if (idx == 0)
+				emit(code, "\tmov\t(%%ecx), %%%s\n", reg);
+			else
+				emit(code, "\tmov\t%d(%%ecx), %%%s\n", idx * 4, reg);
+			if (s->kind != LOC)
+				emit(code, "\tpop\t%%eax\n");
+		} else if (s->kind == LOC)
 			emit(code, "\tmov\t%d(%%ebp), %%%s\n", s->off, reg);
 		else
 			emit(code, "\tmov\t%.*s, %%%s\n", s->length, s->start, reg);
@@ -181,6 +248,14 @@ atom_operand(void)
 			snprintf(obuf, sizeof obuf, "%d(%%ebp)", s->off);
 		else
 			snprintf(obuf, sizeof obuf, "%.*s", s->length, s->start);
+	} else if (is(ARGT)) {
+		int n;
+		pos++;
+		expect(LBCT);
+		n = num_val(&tokens[pos]);
+		pos++;
+		expect(RBCT);
+		snprintf(obuf, sizeof obuf, "%d(%%ebp)", n * 4 + 8);
 	} else {
 		fatal(USER_ERR, NULL, "Expression as operand not implemented yet!");
 	}
@@ -206,10 +281,34 @@ is_lit(void)
 static int
 atom_len(int p)
 {
-	if (tokens[p].type == INTT || tokens[p].type == CHART ||
-	    tokens[p].type == IDT)
+	if (tokens[p].type == INTT || tokens[p].type == CHART)
 		return 1;
 	if (tokens[p].type == SUBT && tokens[p + 1].type == INTT)
 		return 2;
+	if (tokens[p].type == IDT) {
+		int len = 1;
+		if (tokens[p + 1].type == LBCT)
+			len += 3;
+		return len;
+	}
+	if (tokens[p].type == ARGT) {
+		int len = 4;
+		while (tokens[p + len].type == LBCT)
+			len += 3;
+		return len;
+	}
+	if (tokens[p].type == BANDT) {
+		if (tokens[p + 1].type == IDT)
+			return 2;
+		if (tokens[p + 1].type == MULT)
+			return 1 + atom_len(p + 2);
+	}
+	if (tokens[p].type == MULT)
+		return 1 + atom_len(p + 1);
+	if (tokens[p].type == LPT) {
+		int inner = atom_len(p + 1);
+		if (inner > 0)
+			return 2 + inner; /* LPT inner RPT */
+	}
 	return 0;
 }

@@ -5,12 +5,14 @@
  * License: GPL
  */
 
+#include <stdbool.h>
+#include "globals.h"
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";
-const char *VERSION = "a0.5-firefly";
+const char *VERSION = "a0.6-clean";
 
-/* possible const struct conf {...} CONFIG; */
+struct conf CONFIG;
 
 void help();
 
@@ -25,11 +27,17 @@ main(int argc, char *argv[])
 
 	fid = get_opts(argc, argv);
 
+#ifdef DEBUG
+	CONFIG.debug = true;
+#endif
+
 	if (fid >= argc)
 		fatal(USER_ERR, help, "%s needs files to compile!", argv[0]);
 
-	for (; fid < argc; fid++)
+	for (; fid < argc; fid++) {
+		log("Compiling: %s\n", argv[fid]);
 		compile(argv[fid]);
+	}
 
 	return OK;
 }
@@ -47,6 +55,12 @@ get_opts(int argc, char *argv[])
 		case 'v':
 			say_version();
 			exit(OK);
+		case 's':
+			CONFIG.silent = true;
+			break;
+		case 'd':
+			CONFIG.debug = true;
+			break;
 		default:
 			fatal(USER_ERR, help, "Wrong opt!");
 		}

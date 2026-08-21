@@ -8,7 +8,15 @@
 #ifndef GLOBALS_H
 #define GLOBALS_H
 
+#include <stdbool.h>
+
+struct conf {
+	bool silent;
+	bool debug;
+};
+
 extern const char *AUTHOR;
 extern const char *VERSION;
+extern struct conf CONFIG;
 
 #endif

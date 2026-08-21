@@ -19,13 +19,14 @@ struct argdesc {
 	int kind;
 	int lab;
 	char text[64];
+	int start_pos;
 };
 
 static void parse_stmts(FILE *out);
 static void parse_stmt(FILE *out);
 static void parse_call(FILE *out);
-static void parse_var_local(void);
-static void parse_ret(void);
+static void parse_var_local(FILE *out);
+static void parse_ret(FILE *out);
 
 /*
  * Parses a function definition and emits its code into the
@@ -91,16 +92,31 @@ parse_stmt(FILE *out)
 	}
 
 	if (is(SETWT) || is(SETBT)) {
-		parse_var_local();
+		parse_var_local(out);
 		return;
 	}
 
 	if (is(RETT)) {
-		parse_ret();
+		parse_ret(out);
 		return;
 	}
 
-	fatal(USER_ERR, NULL, "Statement not implemented yet!");
+	/* assignment: var = expr */
+	if (is(IDT) && tokens[pos + 1].type == EQT) {
+		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+		pos++; /* IDT */
+		pos++; /* EQT */
+		if (s->kind == LOC)
+			eval_expr(s->off);
+		else {
+			eval_atom("eax");
+			emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
+		}
+		emit(code, "\n");
+		return;
+	}
+
+	fatal(USER_ERR, NULL, "Statement not implemented yet! tok: %s", t_name(tokens[pos].type));
 }
 
 /*
@@ -112,19 +128,33 @@ parse_stmt(FILE *out)
  * with movb.
  */
 static void
-parse_var_local(void)
+parse_var_local(FILE *out)
 {
 	struct token *name;
 	bool word = is(SETWT);
 	int off;
+	int ptr;
+	int dim = 0;
 
 	expect(is(SETBT) ? SETBT : SETWT);
-	accept(MULT);
+	ptr = 0;
+	while (accept(MULT))
+		ptr++;
 
 	expect(IDT);
 	name = &tokens[pos - 1];
+
+	/* array dimensions */
+	if (accept(LBCT)) {
+		if (is(INTT)) {
+			dim = num_val(&tokens[pos]);
+			pos++;
+		}
+		expect(RBCT);
+	}
+
 	off = -(sym_local_count() + 1) * 4;
-	sym_register(LOC, name->start, name->length, off);
+	sym_register(LOC, name->start, name->length, off, ptr);
 
 	emit(code, "\tsub\t$4, %%esp\n");
 
@@ -150,8 +180,20 @@ parse_var_local(void)
 					: "\tmovb\t$%d, %d(%%ebp)\n",
 					num_val(&tokens[pos]), off);
 			pos++;
+		} else if (is(STRT) && dim == 0) {
+			/* string initializer */
+			int lab = reg_str(out);
+			pos++;
+			emit(code, "\tlea\tstr%d, %%eax\n", lab);
+			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+		} else if (is(LBKT)) {
+			/* array literal initializer */
+			int lab = reg_arr(out);
+			emit(code, "\tlea\tarr%d, %%eax\n", lab);
+			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
 		} else if (is(IDT) && !next_is_arith() &&
-			   tokens[pos + 1].type != LPT) {
+			   tokens[pos + 1].type != LPT &&
+			   tokens[pos + 1].type != LBCT) {
 			/* copy */
 			struct sym *src = sym_find(tokens[pos].start, tokens[pos].length);
 
@@ -169,7 +211,49 @@ parse_var_local(void)
 				? "\tmov\t%%eax, %d(%%ebp)\n"
 				: "\tmovb\t%%al, %d(%%ebp)\n", off);
 		} else if (is(IDT) && tokens[pos + 1].type == LPT) {
-			fatal(USER_ERR, NULL, "Calls as initializers not implemented yet!");
+			/* call as initializer */
+			parse_call(out);
+			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+		} else if (is(BANDT)) {
+			/* address-of initializer */
+			pos++;
+			if (is(IDT)) {
+				struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+				pos++;
+				if (s->kind == LOC)
+					emit(code, "\tlea\t%d(%%ebp), %%eax\n", s->off);
+				else
+					emit(code, "\tlea\t%.*s, %%eax\n",
+						s->length, s->start);
+				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+			} else if (is(MULT)) {
+				/* &(*x) = address of x */
+				pos++;
+				if (is(IDT)) {
+					struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+					pos++;
+					if (s->kind == LOC)
+						emit(code, "\tlea\t%d(%%ebp), %%eax\n", s->off);
+					else
+						emit(code, "\tlea\t%.*s, %%eax\n",
+							s->length, s->start);
+					emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+				}
+			}
+		} else if (is(MULT)) {
+			/* dereference initializer */
+			pos++;
+			if (is(IDT)) {
+				struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+				pos++;
+				if (s->kind == LOC)
+					emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+				else
+					emit(code, "\tmov\t%.*s, %%eax\n",
+						s->length, s->start);
+				emit(code, "\tmov\t(%%eax), %%eax\n");
+				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+			}
 		} else if (!word) {
 			fatal(USER_ERR, NULL, "Byte expressions not implemented yet!");
 		} else {
@@ -187,11 +271,15 @@ parse_var_local(void)
  * applies its right side directly as a memory operand.
  */
 static void
-parse_ret(void)
+parse_ret(FILE *out)
 {
 	expect(RETT);
 
-	emit(code, "\tmov\t%s, %%eax\n", atom_operand());
+	if (is(IDT) && tokens[pos + 1].type == LPT) {
+		parse_call(out);
+	} else {
+		emit(code, "\tmov\t%s, %%eax\n", atom_operand());
+	}
 	while (is(ADDT) || is(SUBT)) {
 		bool add = accept(ADDT);
 
@@ -214,7 +302,7 @@ parse_ret(void)
 static void
 parse_call(FILE *out)
 {
-	enum { ASTR, AARR, AOP };
+	enum { ASTR, AARR, AOP, AAE, ACALL };
 	struct argdesc args[32];
 	int n = 0, i;
 	struct token *name = &tokens[pos];
@@ -232,6 +320,77 @@ parse_call(FILE *out)
 		} else if (is(LBKT)) {
 			args[n].kind = AARR;
 			args[n].lab = reg_arr(out);
+		} else if (is(ARGT)) {
+			/* check for chained subscripts: arg[N][M] needs AAE */
+			int peek = pos + 4;
+			if (tokens[peek].type == LBCT) {
+				args[n].kind = AAE;
+				args[n].start_pos = pos;
+				pos++;
+				while (is(LBCT)) { pos++; pos++; pos++; }
+			} else {
+				args[n].kind = AOP;
+				snprintf(args[n].text, sizeof args[n].text, "%s",
+					 atom_operand());
+			}
+		} else if (is(MULT) || is(BANDT) || is(LPT)) {
+			args[n].kind = AAE;
+			args[n].start_pos = pos;
+			/* skip past the expression */
+			if (is(ARGT)) {
+				pos++;
+				while (is(LBCT)) { pos++; pos++; pos++; }
+			} else if (is(BANDT)) {
+				pos++;
+				if (is(MULT)) { pos++; while (is(LBCT)) { pos++; pos++; pos++; } }
+				else if (is(IDT)) { pos++; while (is(LBCT)) { pos++; pos++; pos++; } }
+				else if (is(LPT)) {
+					int depth = 1; pos++;
+					while (depth > 0) {
+						if (is(LPT)) depth++;
+						else if (is(RPT)) depth--;
+						if (depth > 0) pos++;
+					}
+					pos++;
+					while (is(LBCT)) { pos++; pos++; pos++; }
+				}
+			} else if (is(MULT)) {
+				pos++;
+				if (is(LPT)) {
+					int depth = 1; pos++;
+					while (depth > 0) {
+						if (is(LPT)) depth++;
+						else if (is(RPT)) depth--;
+						if (depth > 0) pos++;
+					}
+					pos++;
+				} else if (is(IDT)) {
+					pos++;
+				}
+				while (is(LBCT)) { pos++; pos++; pos++; }
+			} else if (is(LPT)) {
+				int depth = 1; pos++;
+				while (depth > 0) {
+					if (is(LPT)) depth++;
+					else if (is(RPT)) depth--;
+					if (depth > 0) pos++;
+				}
+				pos++;
+				while (is(LBCT)) { pos++; pos++; pos++; }
+			}
+		} else if (is(IDT) && tokens[pos + 1].type == LPT) {
+			args[n].kind = ACALL;
+			args[n].start_pos = pos;
+			/* skip IDT, LPT, args..., RPT */
+			pos += 2;
+			{ int depth = 1;
+			while (depth > 0) {
+				if (is(LPT)) depth++;
+				else if (is(RPT)) depth--;
+				if (depth > 0) pos++;
+			}
+			pos++; /* final RPT */
+			}
 		} else {
 			args[n].kind = AOP;
 			snprintf(args[n].text, sizeof args[n].text, "%s",
@@ -251,6 +410,24 @@ parse_call(FILE *out)
 			break;
 		case AARR:
 			emit(code, "\tpush\t$arr%d\n", args[i].lab);
+			break;
+		case AAE:
+			{
+				int saved = pos;
+				pos = args[i].start_pos;
+				eval_atom("eax");
+				emit(code, "\tpush\t%%eax\n");
+				pos = saved;
+			}
+			break;
+		case ACALL:
+			{
+				int saved = pos;
+				pos = args[i].start_pos;
+				parse_call(out);
+				emit(code, "\tpush\t%%eax\n");
+				pos = saved;
+			}
 			break;
 		default:
 			emit(code, "\tpush\t%s\n", args[i].text);

@@ -9,6 +9,7 @@
 #define EXPR_H
 
 void eval_expr(int off);
+void eval_atom(const char *reg);
 const char *atom_operand(void);
 int next_is_arith(void);
 int is_lit(void);

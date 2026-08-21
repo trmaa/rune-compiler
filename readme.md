@@ -20,8 +20,8 @@ See examples at tests/.
 
 ```console
 $ make # compile source into ./rc
+$ make install # install the compiler and manpages
 $ make debug f=file.rn # see all debug logs of rc after compiling file.rn
-$ make install # install the compiler
 ```
 
 ### Usage

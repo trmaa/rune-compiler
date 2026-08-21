@@ -15,6 +15,7 @@ enum err {
 	OS_ERR = -1
 };
 
+void log(const char *fmt, ...);
 void debug(const char *fmt, ...);
 void fatal(enum err stat, void (*cb)(), const char *fmt, ...);
 

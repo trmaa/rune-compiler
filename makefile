@@ -33,6 +33,7 @@ objd = obj
 obj = $(srcs:$(srcd)/%.s=$(objd)/%.o) $(srcc:$(srcd)/%.c=$(objd)/%.o)
 
 out = rc
+man = man.1
 
 raw ?= 0
 ifeq ($(raw), 1)
@@ -54,15 +55,16 @@ $(out): $(obj)
 
 debug:
 	@cc $(src) -o $@ $(ccf) $(ldf) -DDEBUG
-	@./$@ $(f) 2>&1 >/dev/null | less -R
-	@rm $@
+	@./$@ -silent -debug $(f) 2>&1 | less -R
+	@rm -f $@
 
-install:
+install: $(out)
 	cp $(out) /usr/bin
+	cp $(man) /usr/share/man/man1/rc.1
 
-clean: $(objd)
-	rm -r $<
-	rm $(out)
+clean:
+	rm -rf $(objd)
+	rm -f $(out)
 
 $(objd):
 	$(hid)mkdir $(objd)
