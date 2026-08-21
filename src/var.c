@@ -36,7 +36,8 @@ parse_var(enum visi vis, FILE *out)
 	ptr = accept(MULT);
 
 	expect(IDT);
-	sym_register(GLO, tokens[pos - 1].start, tokens[pos - 1].length, 0, ptr);
+	sym_register(GLO, tokens[pos - 1].start, tokens[pos - 1].length, 0, ptr,
+		     word ? T_WORD : T_BYTE);
 	if (vis == PUB)
 		emit(out, "\t.globl\t%.*s\n", tokens[pos - 1].length, tokens[pos - 1].start);
 	emit(out, "%.*s:\n", tokens[pos - 1].length, tokens[pos - 1].start);

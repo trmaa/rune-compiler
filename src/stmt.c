@@ -27,6 +27,12 @@ static void parse_stmt(FILE *out);
 static void parse_call(FILE *out);
 static void parse_var_local(FILE *out);
 static void parse_ret(FILE *out);
+static int compound_op(enum token_type t);
+static void eval_sum_eax(void);
+static void emit_store_ind(int byt);
+static void emit_binop(enum token_type op);
+static void parse_deref_assign(FILE *out);
+static void parse_indexed_assign(FILE *out);
 
 /*
  * Parses a function definition and emits its code into the
@@ -101,16 +107,46 @@ parse_stmt(FILE *out)
 		return;
 	}
 
-	/* assignment: var = expr */
-	if (is(IDT) && tokens[pos + 1].type == EQT) {
+	/* assignment through a pointer: *a = expr / *a op= expr */
+	if (is(MULT)) {
+		parse_deref_assign(out);
+		return;
+	}
+
+	/* indexed assignment: p[i] = expr / p[i] op= expr */
+	if (is(IDT) && tokens[pos + 1].type == LBCT &&
+	    tokens[pos + 2].type == INTT && tokens[pos + 3].type == RBCT &&
+	    (tokens[pos + 4].type == EQT ||
+	     compound_op(tokens[pos + 4].type))) {
+		parse_indexed_assign(out);
+		return;
+	}
+
+	/* assignment: var = expr / var op= expr */
+	if (is(IDT) && (tokens[pos + 1].type == EQT ||
+			compound_op(tokens[pos + 1].type))) {
 		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-		pos++; /* IDT */
-		pos++; /* EQT */
-		if (s->kind == LOC)
-			eval_expr(s->off);
-		else {
-			eval_atom("eax");
-			emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
+		enum token_type op = tokens[pos + 1].type;
+
+		pos += 2; /* IDT EQ */
+		if (op == EQT) {
+			if (s->kind == LOC)
+				eval_expr(s->off);
+			else {
+				eval_atom("eax");
+				emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
+			}
+		} else {
+			eval_atom("ebx");
+			if (s->kind == LOC)
+				emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+			else
+				emit(code, "\tmov\t%.*s, %%eax\n", s->length, s->start);
+			emit_binop(op);
+			if (s->kind == LOC)
+				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", s->off);
+			else
+				emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
 		}
 		emit(code, "\n");
 		return;
@@ -154,7 +190,8 @@ parse_var_local(FILE *out)
 	}
 
 	off = -(sym_local_count() + 1) * 4;
-	sym_register(LOC, name->start, name->length, off, ptr);
+	sym_register(LOC, name->start, name->length, off, ptr,
+		     word ? T_WORD : T_BYTE);
 
 	emit(code, "\tsub\t$4, %%esp\n");
 
@@ -242,22 +279,33 @@ parse_var_local(FILE *out)
 			}
 		} else if (is(MULT)) {
 			/* dereference initializer */
+			int byt;
+
 			pos++;
 			if (is(IDT)) {
 				struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+
+				byt = deref_is_byte(s);
 				pos++;
 				if (s->kind == LOC)
 					emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
 				else
 					emit(code, "\tmov\t%.*s, %%eax\n",
 						s->length, s->start);
-				emit(code, "\tmov\t(%%eax), %%eax\n");
-				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+				if (byt)
+					emit(code, "\tmovzbl\t(%%eax), %%eax\n");
+				else
+					emit(code, "\tmov\t(%%eax), %%eax\n");
+				if (!word && !ptr)
+					emit(code, "\tmovb\t%%al, %d(%%ebp)\n", off);
+				else
+					emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
 			}
-		} else if (!word) {
-			fatal(USER_ERR, NULL, "Byte expressions not implemented yet!");
-		} else {
+		} else if (ptr > 0 || word) {
+			/* pointers are words regardless of let/leb */
 			eval_expr(off);
+		} else {
+			fatal(USER_ERR, NULL, "Byte expressions not implemented yet!");
 		}
 	}
 
@@ -378,6 +426,14 @@ parse_call(FILE *out)
 				pos++;
 				while (is(LBCT)) { pos++; pos++; pos++; }
 			}
+		} else if (is(IDT) && tokens[pos + 1].type == LBCT &&
+			   tokens[pos + 2].type == INTT &&
+			   tokens[pos + 3].type == RBCT) {
+			/* indexed pointer argument: p[i] */
+			args[n].kind = AAE;
+			args[n].start_pos = pos;
+			pos += 4;
+			while (is(LBCT)) { pos++; pos++; pos++; }
 		} else if (is(IDT) && tokens[pos + 1].type == LPT) {
 			args[n].kind = ACALL;
 			args[n].start_pos = pos;
@@ -437,5 +493,161 @@ parse_call(FILE *out)
 	emit(code, "\tcall\t%.*s\n", name->length, name->start);
 	if (n > 0)
 		emit(code, "\tadd\t$%d, %%esp\n", n * 4);
+	emit(code, "\n");
+}
+
+/* True for the compound assignment operators. */
+static int
+compound_op(enum token_type t)
+{
+	return t == ADDIT || t == SUBIT || t == MULIT || t == DIVIT ||
+	       t == BANDIT || t == BORIT || t == XORIT;
+}
+
+/*
+ * Evaluates an addition/subtraction expression into %eax,
+ * reusing the multiplication codegen from expr.c.
+ */
+static void
+eval_sum_eax(void)
+{
+	eval_muldiv();
+	while (is(ADDT) || is(SUBT)) {
+		bool add = accept(ADDT);
+
+		if (!add)
+			pos++;
+		emit(code, "\tmov\t%%eax, %%ecx\n");
+		eval_muldiv();
+		if (add)
+			emit(code, "\tadd\t%%ecx, %%eax\n");
+		else
+			emit(code, "\tsub\t%%eax, %%ecx\n\tmov\t%%ecx, %%eax\n");
+	}
+}
+
+/* Stores %eax into the cell pointed by %edi, sized by byt. */
+static void
+emit_store_ind(int byt)
+{
+	if (byt)
+		emit(code, "\tmovb\t%%al, (%%edi)\n");
+	else
+		emit(code, "\tmov\t%%eax, (%%edi)\n");
+}
+
+/* Applies a compound operator: %eax <op>= %ebx. */
+static void
+emit_binop(enum token_type op)
+{
+	switch (op) {
+	case ADDIT:
+		emit(code, "\tadd\t%%ebx, %%eax\n");
+		break;
+	case SUBIT:
+		emit(code, "\tsub\t%%ebx, %%eax\n");
+		break;
+	case MULIT:
+		emit(code, "\timul\t%%ebx, %%eax\n");
+		break;
+	case DIVIT:
+		emit(code, "\txor\t%%edx, %%edx\n\tdiv\t%%ebx\n");
+		break;
+	case BANDIT:
+		emit(code, "\tand\t%%ebx, %%eax\n");
+		break;
+	case BORIT:
+		emit(code, "\tor\t%%ebx, %%eax\n");
+		break;
+	case XORIT:
+		emit(code, "\txor\t%%ebx, %%eax\n");
+		break;
+	default:
+		break;
+	}
+}
+
+/*
+ * Parses an assignment through a dereference: *a = expr or
+ * *a op= expr. The address is evaluated into %edi first, then
+ * the right side. Byte pointers store with movb; storing
+ * through deeper pointer levels keeps word size, since those
+ * cells hold pointers.
+ */
+static void
+parse_deref_assign(FILE *out)
+{
+	int byt = 0;
+	enum token_type op;
+
+	pos++; /* MULT */
+	if (is(IDT))
+		byt = deref_is_byte(sym_find(tokens[pos].start,
+					     tokens[pos].length));
+	eval_atom("edi");
+
+	op = tokens[pos].type;
+	if (accept(EQT)) {
+		eval_sum_eax();
+	} else if (compound_op(op)) {
+		pos++;
+		eval_atom("ebx");
+		if (byt)
+			emit(code, "\tmovzbl\t(%%edi), %%eax\n");
+		else
+			emit(code, "\tmov\t(%%edi), %%eax\n");
+		emit_binop(op);
+	} else {
+		fatal(USER_ERR, NULL, "Expected '=' in assignment!");
+	}
+	emit_store_ind(byt);
+	emit(code, "\n");
+}
+
+/*
+ * Parses an indexed assignment through a pointer: p[i] = expr
+ * or p[i] op= expr. Only constant indexes are supported,
+ * matching the read side. The stride depends on the pointee
+ * type: bytes advance one, words four.
+ */
+static void
+parse_indexed_assign(FILE *out)
+{
+	struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+	int byt, stride, idx;
+	enum token_type op;
+
+	if (!s->is_ptr)
+		fatal(USER_ERR, NULL, "Indexed assignment on a non-pointer!");
+	byt = deref_is_byte(s);
+	stride = byt ? 1 : 4;
+
+	pos++; /* IDT */
+	pos++; /* LBCT */
+	idx = num_val(&tokens[pos]);
+	pos += 2; /* INT RBCT */
+
+	if (s->kind == LOC)
+		emit(code, "\tmov\t%d(%%ebp), %%edi\n", s->off);
+	else
+		emit(code, "\tmov\t%.*s, %%edi\n", s->length, s->start);
+	if (idx != 0)
+		emit(code, "\tadd\t$%d, %%edi\n", idx * stride);
+
+	op = tokens[pos].type;
+	if (accept(EQT)) {
+		eval_sum_eax();
+	} else if (compound_op(op)) {
+		pos++;
+		eval_atom("ebx");
+		if (byt)
+			emit(code, "\tmovzbl\t(%%edi), %%eax\n");
+		else
+			emit(code, "\tmov\t(%%edi), %%eax\n");
+		emit_binop(op);
+	} else {
+		fatal(USER_ERR, NULL, "Expected '=' in assignment!");
+	}
+	emit_store_ind(byt);
 	emit(code, "\n");
 }

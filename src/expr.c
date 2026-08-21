@@ -17,9 +17,19 @@ static char obuf[64];
 
 void swap(int *a, int *b);
 
-static void eval_muldiv(void);
 static int chain_end(void);
 static int atom_len(int p);
+
+/*
+ * True when dereferencing s yields a byte: one pointer level
+ * left and it points to bytes. Deeper levels still hold
+ * pointers, which are words.
+ */
+int
+deref_is_byte(struct sym *s)
+{
+	return s->is_ptr == 1 && s->base == T_BYTE;
+}
 
 /*
  * Evaluates an addition/subtraction expression into the stack
@@ -87,7 +97,7 @@ chain_end(void)
  * Evaluates a multiplication/division chain into %eax.
  * The divisor (or multiplier) is loaded into %ebx.
  */
-static void
+void
 eval_muldiv(void)
 {
 	int tmp_pos;
@@ -169,9 +179,28 @@ eval_atom(const char *reg)
 			emit(code, "\tlea\t(%%%s), %%%s\n", reg, reg);
 		}
 	} else if (is(MULT)) {
+		int byt = 0;
+
 		pos++;
+		if (is(IDT))
+			byt = deref_is_byte(sym_find(tokens[pos].start,
+						     tokens[pos].length));
 		eval_atom(reg);
-		emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
+		if (byt)
+			emit(code, "\tmovzbl\t(%%%s), %%%s\n", reg, reg);
+		else
+			emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
+		while (is(LBCT)) {
+			int idx;
+
+			pos++;
+			idx = num_val(&tokens[pos]);
+			pos++;
+			expect(RBCT);
+			if (idx != 0)
+				emit(code, "\tadd\t$%d, %%%s\n", idx * 4, reg);
+			emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
+		}
 	} else if (is(LPT)) {
 		pos++; /* skip ( */
 		eval_muldiv();
@@ -186,11 +215,25 @@ eval_atom(const char *reg)
 				emit(code, "\tsub\t%%eax, %%ecx\n\tmov\t%%ecx, %%eax\n");
 		}
 		expect(RPT);
+		while (is(LBCT)) {
+			int idx;
+
+			pos++;
+			idx = num_val(&tokens[pos]);
+			pos++;
+			expect(RBCT);
+			if (idx != 0)
+				emit(code, "\tadd\t$%d, %%eax\n", idx * 4);
+			emit(code, "\tmov\t(%%eax), %%eax\n");
+		}
 	} else if (is(IDT)) {
 		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
 		pos++;
 		if (is(LBCT) && s->is_ptr) {
 			int idx;
+			int byt = deref_is_byte(s);
+			int stride = byt ? 1 : 4;
+
 			pos++;
 			idx = num_val(&tokens[pos]);
 			pos++;
@@ -201,10 +244,19 @@ eval_atom(const char *reg)
 				emit(code, "\tpush\t%%eax\n");
 				emit(code, "\tmov\t%.*s, %%ecx\n", s->length, s->start);
 			}
-			if (idx == 0)
-				emit(code, "\tmov\t(%%ecx), %%%s\n", reg);
-			else
-				emit(code, "\tmov\t%d(%%ecx), %%%s\n", idx * 4, reg);
+			if (idx == 0) {
+				if (byt)
+					emit(code, "\tmovzbl\t(%%ecx), %%%s\n", reg);
+				else
+					emit(code, "\tmov\t(%%ecx), %%%s\n", reg);
+			} else {
+				if (byt)
+					emit(code, "\tmovzbl\t%d(%%ecx), %%%s\n",
+					     idx * stride, reg);
+				else
+					emit(code, "\tmov\t%d(%%ecx), %%%s\n",
+					     idx * stride, reg);
+			}
 			if (s->kind != LOC)
 				emit(code, "\tpop\t%%eax\n");
 		} else if (s->kind == LOC)
@@ -303,12 +355,20 @@ atom_len(int p)
 		if (tokens[p + 1].type == MULT)
 			return 1 + atom_len(p + 2);
 	}
-	if (tokens[p].type == MULT)
-		return 1 + atom_len(p + 1);
+	if (tokens[p].type == MULT) {
+		int len = 1 + atom_len(p + 1);
+
+		while (len > 0 && tokens[p + len].type == LBCT)
+			len += 3;
+		return len;
+	}
 	if (tokens[p].type == LPT) {
 		int inner = atom_len(p + 1);
-		if (inner > 0)
-			return 2 + inner; /* LPT inner RPT */
+		int len = inner > 0 ? 2 + inner : 0; /* LPT inner RPT */
+
+		while (len > 0 && tokens[p + len].type == LBCT)
+			len += 3;
+		return len;
 	}
 	return 0;
 }

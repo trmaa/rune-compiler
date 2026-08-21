@@ -1,5 +1,7 @@
 let g = 10
 leb *gp = &g
+setw cells[4]
+leb bytes[4]
 
 pub fn main {
 	let l = 20
@@ -11,7 +13,15 @@ pub fn main {
 
 	let v = *a
 	let h = gp[0]
+	let *cp = &cells
+	leb *bp = &bytes
 
-	printf("%d\n", (*c)[1])
+	*a = 25
+	*gp += 1
+	cp[2] = 7
+	bp[0] = 'A'
+	bp[1] = 'B'
+
+	printf("%d %d %d %c%c\n", *a, *gp, cp[2], *bp, bp[1])
 	printf("%d\n", *(a + 1))
 }

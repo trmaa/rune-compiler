@@ -50,6 +50,21 @@ $ ./a.out
 
 There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-). A word can also hold a float (32 bits).
 
+### Pointers
+
+Declare them with stars after the type: `let *p` is a pointer
+to word, `leb *bp` a pointer to byte, and each extra star adds
+a level (`leb **pp` is a pointer to a pointer to byte).
+
+- Address-of with `&var`, dereference with `*p`, indexing with
+  `p[i]` (stride 1 on byte pointers, 4 on word pointers).
+- Stores through pointers: `*p = v` and `p[i] = v`. Byte
+  pointers store one byte (movb), word pointers four.
+- Compound assignment works everywhere: `x += 1`, `*p += 2`,
+  `p[i] -= 3`, with `+= -= *= /= &= |= ^=`.
+- Pointer arithmetic is raw: `p + 1` adds exactly 1, like
+  assembly. Bytes load as unsigned (zero extended).
+
 Input: .rn file, Output: x86-i386 AT&T .s file.
 
 Variables outside of any scope, and strings are stored in .data.

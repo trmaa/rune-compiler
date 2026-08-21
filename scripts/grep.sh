@@ -8,8 +8,8 @@
 # Copyright (c) 2026 Pablo Trik Marin
 # License: GPL
 
-OK=true
-ERR=false
+OK=0
+ERR=1
 
 help() {
 	echo "Use: ./grep [opts] 'string to search'"
@@ -19,12 +19,12 @@ help() {
 }
 
 main() {
-	if [[ -v $1 ]]; then
+	if (( $# < 1 )); then
 		echo -e '\e[33mTo grep the base, you need a string to grep for\e[0m'
-		help ERR
+		help $ERR
 	fi
 
-	[[ $1 == '-h' ]] && help OK
+	[[ $1 == '-h' ]] && help $OK
 
 	local f
 	for f in src/*; do
