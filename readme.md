@@ -6,6 +6,8 @@ Resembles assembly but has loops, variables, and pointers.
 
 See examples at tests/.
 
+![](logo.png)
+
 ## Done for now
 
 - Tokenizer

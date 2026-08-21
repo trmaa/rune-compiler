@@ -5,8 +5,6 @@ endif
 syntax clear
 
 syntax keyword rune_type let leb setw setb fn
-syntax match rune_type "%."
-syntax match rune_type "\\."
 
 syntax match rune_operator "[+\-*/><=%\[\]&|^~!]"
 syntax keyword rune_keyword pub if else while for arg ret
@@ -23,6 +21,9 @@ syntax match rune_number "\<0x[0-9a-fA-F]\+\>"
 syntax match rune_number "\<[A-Z_A-Z]\+\>"
 
 syntax match rune_preproc "^#.*$"
+
+syntax match rune_type "%."
+syntax match rune_type "\\."
 
 syntax match rune_comment "//.*$" contains=NONE containedin=ALL
 
