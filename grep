@@ -28,7 +28,7 @@ main() {
 
 	local f
 	for f in src/*; do
-		local match=$(nl < $f | grep -F $1)
+		local match=$(nl -ba < $f | grep -F $1)
 		if [[ -n $match ]]; then
 			echo $f >&2
 			echo "$match"
