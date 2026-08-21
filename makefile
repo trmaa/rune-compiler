@@ -44,7 +44,7 @@ else
         say = @echo
 endif
 
-.PHONY: all debug clean install
+.PHONY: all debug clean install install-syntax
 
 all: $(out)
 
@@ -61,6 +61,9 @@ debug:
 install: $(out)
 	cp $(out) /usr/bin
 	cp $(man) /usr/share/man/man1/rc.1
+
+install-syntax:
+	cd syntax; ./install-syntax
 
 clean:
 	rm -rf $(objd)

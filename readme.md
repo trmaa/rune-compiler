@@ -16,6 +16,7 @@ See examples at tests/.
 - Control flow: `if`/`else`, `while`, and `for init, cond, step`
 - Comparisons (`== != < > <= >=`), boolean logic with short-circuit (`&& || !`)
   and bitwise operators (`& | ^ ~ << >>`) in every expression
+- Syntax highlighting on vim
 
 ## How to
 
@@ -24,7 +25,7 @@ See examples at tests/.
 ```console
 $ make # compile source into ./rc
 $ make install # install the compiler and manpages
-$ make debug f=file.rn # see all debug logs of rc after compiling file.rn
+$ make install-syntax # install syntax for vim
 ```
 
 ### Usage
@@ -38,6 +39,7 @@ Options:
 $ rc file.rn # compiles file.rn into file.s
 $ cc -m32 -no-pie file.s # assembles and links the binarie with libc and outputs a program
 $ ./a.out # run the program
+$ make debug f=file.rn # see all debug logs of rc after compiling file.rn
 ```
 
 Alternatively, if you don't need libc, just:

@@ -10,7 +10,7 @@
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";
-const char *VERSION = "r1.0-bronce";
+const char *VERSION = "r1.1-liken";
 
 struct conf CONFIG;
 
