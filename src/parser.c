@@ -78,14 +78,12 @@ void parse(FILE *out)
 	}
 }
 
-bool
-is(enum token_type t)
+bool is(enum token_type t)
 {
 	return tokens[pos].type == t;
 }
 
-bool
-accept(enum token_type t)
+bool accept(enum token_type t)
 {
 	if (is(t)) {
 		pos++;
@@ -94,16 +92,14 @@ accept(enum token_type t)
 	return false;
 }
 
-void
-expect(enum token_type t)
+void expect(enum token_type t)
 {
 	if (!accept(t))
 		fatal(USER_ERR, NULL, "Expected token %s but got %s!", t_name(t),
 		      t_name(tokens[pos].type));
 }
 
-void
-emit(FILE *out, const char *fmt, ...)
+void emit(FILE *out, const char *fmt, ...)
 {
 	va_list args;
 
@@ -113,8 +109,7 @@ emit(FILE *out, const char *fmt, ...)
 }
 
 /* Emits the .data section header, only once. */
-void
-sec_data(FILE *out)
+void sec_data(FILE *out)
 {
 	if (!data_used) {
 		data_used = 1;

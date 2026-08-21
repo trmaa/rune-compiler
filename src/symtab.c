@@ -15,22 +15,19 @@
 static struct sym syms[SYM_MAX];
 static int sym_cnt, loc_cnt;
 
-void
-sym_reset(void)
+void sym_reset(void)
 {
 	sym_cnt = 0;
 	loc_cnt = 0;
 }
 
 /* Clears only the local symbols, keeping the globals. */
-void
-sym_locals_clear(void)
+void sym_locals_clear(void)
 {
 	loc_cnt = 0;
 }
 
-void
-sym_register(int kind, char *start, int length, int off, int is_ptr, int base)
+void sym_register(int kind, char *start, int length, int off, int is_ptr, int base)
 {
 	if (sym_cnt >= SYM_MAX)
 		fatal(USER_ERR, NULL, "Too many variables!");
@@ -69,8 +66,7 @@ sym_find(char *start, int length)
 	return NULL;
 }
 
-int
-sym_local_count(void)
+int sym_local_count(void)
 {
 	return loc_cnt;
 }

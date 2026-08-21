@@ -39,8 +39,7 @@ static void parse_indexed_assign(FILE *out);
  * .text section (accumulated in a temporary file). The first
  * function creates that temporary file.
  */
-void
-parse_fn(enum visi vis, FILE *out)
+void parse_fn(enum visi vis, FILE *out)
 {
 	expect(FNT);
 	expect(IDT);

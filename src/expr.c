@@ -25,8 +25,7 @@ static int atom_len(int p);
  * left and it points to bytes. Deeper levels still hold
  * pointers, which are words.
  */
-int
-deref_is_byte(struct sym *s)
+int deref_is_byte(struct sym *s)
 {
 	return s->is_ptr == 1 && s->base == T_BYTE;
 }
@@ -38,8 +37,7 @@ deref_is_byte(struct sym *s)
  * The left side is found by scanning the token stream for the
  * operator that follows the first multiplication chain.
  */
-void
-eval_expr(int off)
+void eval_expr(int off)
 {
 	int opos, op, mark, end;
 
@@ -97,8 +95,7 @@ chain_end(void)
  * Evaluates a multiplication/division chain into %eax.
  * The divisor (or multiplier) is loaded into %ebx.
  */
-void
-eval_muldiv(void)
+void eval_muldiv(void)
 {
 	int tmp_pos;
 
@@ -127,8 +124,7 @@ eval_muldiv(void)
  * variable) into the given register. Chars are emitted in
  * hexadecimal, negative literals keep their sign.
  */
-void
-eval_atom(const char *reg)
+void eval_atom(const char *reg)
 {
 	int sign = 1;
 
@@ -314,16 +310,14 @@ atom_operand(void)
 	return obuf;
 }
 
-int
-next_is_arith(void)
+int next_is_arith(void)
 {
 	enum token_type t = tokens[pos + 1].type;
 
 	return t == ADDT || t == SUBT || t == MULT || t == DIVT || t == MODT;
 }
 
-int
-is_lit(void)
+int is_lit(void)
 {
 	return is(INTT) || is(CHART) ||
 	       (is(SUBT) && tokens[pos + 1].type == INTT);

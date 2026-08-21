@@ -274,8 +274,7 @@ bool is_alnum(char c)
  * Numeric value of a literal token. Handles decimal,
  * hexadecimal (0x..) and binary (0b..) literals.
  */
-int
-num_val(const struct token *t)
+int num_val(const struct token *t)
 {
 	const char *s = t->start;
 	int len = t->length;

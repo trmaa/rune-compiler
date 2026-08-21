@@ -24,8 +24,7 @@ static int list_has_char(int p);
  * Floats only fit in words, a float initializer in a setw is
  * emitted as .float.
  */
-void
-parse_var(enum visi vis, FILE *out)
+void parse_var(enum visi vis, FILE *out)
 {
 	bool word = is(SETWT);
 	int sz = 1;
@@ -99,8 +98,7 @@ parse_var(enum visi vis, FILE *out)
  * Registers a string literal into the .data section and
  * returns its label number.
  */
-int
-reg_str(FILE *out)
+int reg_str(FILE *out)
 {
 	sec_data(out);
 	emit(out, "str%d:\n\t.string\t\"%.*s\"\n", str_cnt,
@@ -115,8 +113,7 @@ reg_str(FILE *out)
  * literals with floats become .float and literals with
  * chars become .byte.
  */
-int
-reg_arr(FILE *out)
+int reg_arr(FILE *out)
 {
 	int flt = list_has_float(pos), byt = list_has_char(pos);
 
