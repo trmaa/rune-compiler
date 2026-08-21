@@ -18,6 +18,11 @@ See examples at tests/.
   and bitwise operators (`& | ^ ~ << >>`) in every expression
 - Syntax highlighting on vim
 
+## To do
+
+- Structs
+- Integrate gcc preprocessor, assembler, and linker by forking and execing
+
 ## How to
 
 ### Build
