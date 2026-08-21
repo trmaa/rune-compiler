@@ -45,10 +45,10 @@ void sym_register(int kind, char *start, int length, int off, int is_ptr, int ba
 
 /*
  * Finds a variable by name, preferring the local table over
- * the global one. Fatals if the variable does not exist.
+ * the global one. Returns NULL if the variable does not exist.
  */
 struct sym *
-sym_find(char *start, int length)
+sym_lookup(char *start, int length)
 {
 	int i;
 
@@ -62,8 +62,21 @@ sym_find(char *start, int length)
 		    !memcmp(syms[i].start, start, (size_t)length))
 			return &syms[i];
 
-	fatal(USER_ERR, NULL, "Unknown variable '%.*s'!", length, start);
 	return NULL;
+}
+
+/*
+ * Finds a variable by name, preferring the local table over
+ * the global one. Fatals if the variable does not exist.
+ */
+struct sym *
+sym_find(char *start, int length)
+{
+	struct sym *s = sym_lookup(start, length);
+
+	if (!s)
+		fatal(USER_ERR, NULL, "Unknown variable '%.*s'!", length, start);
+	return s;
 }
 
 int sym_local_count(void)

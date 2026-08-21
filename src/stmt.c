@@ -18,19 +18,20 @@
 struct argdesc {
 	int kind;
 	int lab;
-	char text[64];
-	int start_pos;
+	FILE *buf;
 };
 
 static void parse_stmts(FILE *out);
 static void parse_stmt(FILE *out);
-static void parse_call(FILE *out);
+static void parse_body(FILE *out);
+static void parse_if(FILE *out);
+static void parse_while(FILE *out);
+static void parse_for(FILE *out);
 static void parse_var_local(FILE *out);
 static void parse_ret(FILE *out);
 static int compound_op(enum token_type t);
-static void eval_sum_eax(void);
-static void emit_store_ind(int byt);
 static void emit_binop(enum token_type op);
+static void emit_incdec(int inc, struct sym *s);
 static void parse_deref_assign(FILE *out);
 static void parse_indexed_assign(FILE *out);
 
@@ -85,14 +86,35 @@ parse_stmts(FILE *out)
 }
 
 /*
- * Parses a single statement. Currently function calls,
- * variable declarations and return statements are supported.
+ * Parses the body of a control flow statement: either a block
+ * between braces or the single statement that follows.
+ */
+static void
+parse_body(FILE *out)
+{
+	if (accept(LBKT)) {
+		parse_stmts(out);
+		expect(RBKT);
+		return;
+	}
+
+	while (is(NEWT) || is(SEMIT))
+		pos++;
+	parse_stmt(out);
+}
+
+/*
+ * Parses a single statement. Supported: function calls,
+ * variable declarations, returns, control flow (if, while,
+ * for), increment/decrement, assignments and calls.
  */
 static void
 parse_stmt(FILE *out)
 {
+	struct sym *s;
+
 	if (is(IDT) && tokens[pos + 1].type == LPT) {
-		parse_call(out);
+		parse_call();
 		return;
 	}
 
@@ -103,6 +125,41 @@ parse_stmt(FILE *out)
 
 	if (is(RETT)) {
 		parse_ret(out);
+		return;
+	}
+
+	if (is(IFT)) {
+		parse_if(out);
+		return;
+	}
+
+	if (is(WHILET)) {
+		parse_while(out);
+		return;
+	}
+
+	if (is(FORT)) {
+		parse_for(out);
+		return;
+	}
+
+	/* prefix increment/decrement: ++i / --i */
+	if (is(INCT) || is(DECT)) {
+		int inc = is(INCT);
+
+		pos++;
+		emit_incdec(inc, NULL);
+		emit(code, "\n");
+		return;
+	}
+
+	/* postfix increment/decrement: i++ / i-- */
+	if (is(IDT) && (tokens[pos + 1].type == INCT ||
+			tokens[pos + 1].type == DECT)) {
+		s = sym_find(tokens[pos].start, tokens[pos].length);
+		emit_incdec(tokens[pos + 1].type == INCT, s);
+		pos += 2;
+		emit(code, "\n");
 		return;
 	}
 
@@ -124,28 +181,31 @@ parse_stmt(FILE *out)
 	/* assignment: var = expr / var op= expr */
 	if (is(IDT) && (tokens[pos + 1].type == EQT ||
 			compound_op(tokens[pos + 1].type))) {
-		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+		struct sym *t = sym_find(tokens[pos].start, tokens[pos].length);
 		enum token_type op = tokens[pos + 1].type;
 
 		pos += 2; /* IDT EQ */
 		if (op == EQT) {
-			if (s->kind == LOC)
-				eval_expr(s->off);
+			if (t->kind == LOC)
+				eval_expr(t->off);
 			else {
-				eval_atom("eax");
-				emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
+				expr_eax();
+				emit(code, "\tmov\t%%eax, %.*s\n",
+				     t->length, t->start);
 			}
 		} else {
-			eval_atom("ebx");
-			if (s->kind == LOC)
-				emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+			expr_into("ebx");
+			if (t->kind == LOC)
+				emit(code, "\tmov\t%d(%%ebp), %%eax\n", t->off);
 			else
-				emit(code, "\tmov\t%.*s, %%eax\n", s->length, s->start);
+				emit(code, "\tmov\t%.*s, %%eax\n",
+				     t->length, t->start);
 			emit_binop(op);
-			if (s->kind == LOC)
-				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", s->off);
+			if (t->kind == LOC)
+				emit(code, "\tmov\t%%eax, %d(%%ebp)\n", t->off);
 			else
-				emit(code, "\tmov\t%%eax, %.*s\n", s->length, s->start);
+				emit(code, "\tmov\t%%eax, %.*s\n",
+				     t->length, t->start);
 		}
 		emit(code, "\n");
 		return;
@@ -155,12 +215,149 @@ parse_stmt(FILE *out)
 }
 
 /*
+ * Emits incl/decl on the variable found at the current
+ * position when s is NULL, otherwise on s. The identifier is
+ * consumed only when s is NULL.
+ */
+static void
+emit_incdec(int inc, struct sym *s)
+{
+	if (!s) {
+		if (!is(IDT))
+			fatal(USER_ERR, NULL, "Expected variable after ++/--!");
+		s = sym_find(tokens[pos].start, tokens[pos].length);
+		pos++;
+	}
+
+	if (s->kind == LOC)
+		emit(code, inc ? "\tincl\t%d(%%ebp)\n" : "\tdecl\t%d(%%ebp)\n",
+		     s->off);
+	else
+		emit(code, inc ? "\tincl\t%.*s\n" : "\tdecl\t%.*s\n",
+		     s->length, s->start);
+}
+
+/*
+ * Parses an if statement with an optional else. The body is a
+ * block between braces or the single statement that follows.
+ * An else-if chains naturally through recursion.
+ */
+static void
+parse_if(FILE *out)
+{
+	int lelse, lend;
+
+	expect(IFT);
+
+	lelse = new_label();
+	lend = new_label();
+
+	expr_eax();
+	emit(code, "\ttest\t%%eax, %%eax\n\tje\tL%d\n\n", lelse);
+
+	parse_body(out);
+
+	while (is(NEWT) || is(SEMIT))
+		pos++;
+	if (accept(ELSET)) {
+		emit(code, "\tjmp\tL%d\nL%d:\n", lend, lelse);
+		if (is(IFT))
+			parse_if(out);
+		else
+			parse_body(out);
+		emit(code, "L%d:\n\n", lend);
+	} else {
+		emit(code, "L%d:\n\n", lelse);
+	}
+}
+
+/*
+ * Parses a while loop: the condition jumps out of the body,
+ * the body falls back to the condition.
+ */
+static void
+parse_while(FILE *out)
+{
+	int ltop, lend;
+
+	expect(WHILET);
+
+	ltop = new_label();
+	lend = new_label();
+
+	emit(code, "L%d:\n", ltop);
+	expr_eax();
+	emit(code, "\ttest\t%%eax, %%eax\n\tje\tL%d\n\n", lend);
+
+	parse_body(out);
+
+	emit(code, "\tjmp\tL%d\nL%d:\n\n", ltop, lend);
+}
+
+/*
+ * Parses a for loop with the syntax: for init, cond, step.
+ * The init runs once, the condition guards every round and
+ * the step runs after each round of the body.
+ */
+static void
+parse_for(FILE *out)
+{
+	int lcond, lend;
+	FILE *stepbuf, *saved;
+
+	expect(FORT);
+
+	lcond = new_label();
+	lend = new_label();
+
+	/* init: declaration or simple statement */
+	if (is(SETWT) || is(SETBT))
+		parse_var_local(out);
+	else if (!is(COMT))
+		parse_stmt(out);
+	accept(COMT);
+
+	emit(code, "L%d:\n", lcond);
+	if (!is(COMT)) {
+		expr_eax();
+		emit(code, "\ttest\t%%eax, %%eax\n\tje\tL%d\n", lend);
+	}
+	expect(COMT);
+
+	/*
+	 * The step comes before the body in the token stream
+	 * but must run after it, so it is parsed into a buffer.
+	 */
+	stepbuf = NULL;
+	if (!is(NEWT) && !is(LBKT)) {
+		stepbuf = tmpfile();
+		saved = code;
+		code = stepbuf;
+		parse_stmt(out);
+		code = saved;
+	}
+
+	parse_body(out);
+
+	if (stepbuf) {
+		char buf[1024];
+		int k;
+
+		rewind(stepbuf);
+		while ((k = (int)fread(buf, 1, sizeof buf, stepbuf)) > 0)
+			fwrite(buf, 1, (size_t)k, code);
+		fclose(stepbuf);
+	}
+
+	emit(code, "\tjmp\tL%d\nL%d:\n\n", lcond, lend);
+}
+
+/*
  * Parses a local variable declaration and emits the stack
- * allocation plus the initialization. A bare literal or
- * variable is stored directly into the slot, more complex
- * initializers are evaluated by the expression codegen.
- * Byte variables use the same 4-byte slot but are stored
- * with movb.
+ * allocation plus the initialization. A bare literal is
+ * stored directly into the slot, any other initializer goes
+ * through the expression evaluator. Byte variables are stored
+ * with movb, all slots are 4 bytes wide.
  */
 static void
 parse_var_local(FILE *out)
@@ -195,7 +392,7 @@ parse_var_local(FILE *out)
 	emit(code, "\tsub\t$4, %%esp\n");
 
 	if (accept(EQT)) {
-		if (is_lit() && !next_is_arith()) {
+		if (is_lit() && !op_follows(pos + (is(SUBT) ? 2 : 1))) {
 			/* literal */
 			int sign = 1;
 
@@ -218,37 +415,15 @@ parse_var_local(FILE *out)
 			pos++;
 		} else if (is(STRT) && dim == 0) {
 			/* string initializer */
-			int lab = reg_str(out);
+			int lab = reg_str();
 			pos++;
 			emit(code, "\tlea\tstr%d, %%eax\n", lab);
-			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+			emit(code, word ? "\tmov\t%%eax, %d(%%ebp)\n"
+				: "\tmovb\t%%al, %d(%%ebp)\n", off);
 		} else if (is(LBKT)) {
 			/* array literal initializer */
-			int lab = reg_arr(out);
+			int lab = reg_arr();
 			emit(code, "\tlea\tarr%d, %%eax\n", lab);
-			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
-		} else if (is(IDT) && !next_is_arith() &&
-			   tokens[pos + 1].type != LPT &&
-			   tokens[pos + 1].type != LBCT) {
-			/* copy */
-			struct sym *src = sym_find(tokens[pos].start, tokens[pos].length);
-
-			pos++;
-			if (src->kind == LOC)
-				emit(code, word
-					? "\tmov\t%d(%%ebp), %%eax\n"
-					: "\tmovb\t%d(%%ebp), %%al\n", src->off);
-			else
-				emit(code, word
-					? "\tmov\t%.*s, %%eax\n"
-					: "\tmovb\t%.*s, %%al\n",
-					src->length, src->start);
-			emit(code, word
-				? "\tmov\t%%eax, %d(%%ebp)\n"
-				: "\tmovb\t%%al, %d(%%ebp)\n", off);
-		} else if (is(IDT) && tokens[pos + 1].type == LPT) {
-			/* call as initializer */
-			parse_call(out);
 			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
 		} else if (is(BANDT)) {
 			/* address-of initializer */
@@ -276,35 +451,13 @@ parse_var_local(FILE *out)
 					emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
 				}
 			}
-		} else if (is(MULT)) {
-			/* dereference initializer */
-			int byt;
-
-			pos++;
-			if (is(IDT)) {
-				struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-
-				byt = deref_is_byte(s);
-				pos++;
-				if (s->kind == LOC)
-					emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
-				else
-					emit(code, "\tmov\t%.*s, %%eax\n",
-						s->length, s->start);
-				if (byt)
-					emit(code, "\tmovzbl\t(%%eax), %%eax\n");
-				else
-					emit(code, "\tmov\t(%%eax), %%eax\n");
-				if (!word && !ptr)
-					emit(code, "\tmovb\t%%al, %d(%%ebp)\n", off);
-				else
-					emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
-			}
-		} else if (ptr > 0 || word) {
-			/* pointers are words regardless of let/leb */
-			eval_expr(off);
+		} else if (!word && ptr == 0) {
+			/* byte expressions store their low byte */
+			expr_eax();
+			emit(code, "\tmovb\t%%al, %d(%%ebp)\n", off);
 		} else {
-			fatal(USER_ERR, NULL, "Byte expressions not implemented yet!");
+			/* pointers are words regardless of setw/setb */
+			eval_expr(off);
 		}
 	}
 
@@ -312,29 +465,16 @@ parse_var_local(FILE *out)
 }
 
 /*
- * Parses a return statement. The value is loaded into %eax.
- * Literals, variables and add/subtract expressions are
- * supported. The left side goes into %eax and every operator
- * applies its right side directly as a memory operand.
+ * Parses a return statement. The value, when present, is a
+ * full expression evaluated into %eax.
  */
 static void
 parse_ret(FILE *out)
 {
 	expect(RETT);
 
-	if (is(IDT) && tokens[pos + 1].type == LPT) {
-		parse_call(out);
-	} else {
-		emit(code, "\tmov\t%s, %%eax\n", atom_operand());
-	}
-	while (is(ADDT) || is(SUBT)) {
-		bool add = accept(ADDT);
-
-		if (!add)
-			pos++;
-		emit(code, add ? "\tadd\t%s, %%eax\n" : "\tsub\t%s, %%eax\n",
-		     atom_operand());
-	}
+	if (!is(NEWT) && !is(RBKT) && !is(SEMIT) && !is(EOFT))
+		expr_eax();
 
 	emit(code, "\n");
 }
@@ -342,16 +482,17 @@ parse_ret(FILE *out)
 /*
  * Parses a function call with its arguments and emits the
  * pushes (in reverse order), the call and the stack cleanup.
- * Strings and array literals are emitted to the .data section
- * as strN/arrN labels, every other argument is pushed as a
- * raw operand (literal or variable).
+ * Every argument is a full expression: it is evaluated into a
+ * temporary buffer during the scan and pushed afterwards so
+ * the arguments land in cdecl order.
  */
-static void
-parse_call(FILE *out)
+void parse_call(void)
 {
-	enum { ASTR, AARR, AOP, AAE, ACALL };
+	enum { ASTR, AARR, AEXPR };
 	struct argdesc args[32];
-	int n = 0, i;
+	char buf[1024];
+	int n = 0, i, k;
+	FILE *saved;
 	struct token *name = &tokens[pos];
 
 	pos++; /* IDT */
@@ -362,94 +503,18 @@ parse_call(FILE *out)
 			fatal(USER_ERR, NULL, "Too many arguments!");
 		if (is(STRT)) {
 			args[n].kind = ASTR;
-			args[n].lab = reg_str(out);
+			args[n].lab = reg_str();
 			pos++;
 		} else if (is(LBKT)) {
 			args[n].kind = AARR;
-			args[n].lab = reg_arr(out);
-		} else if (is(ARGT)) {
-			/* check for chained subscripts: arg[N][M] needs AAE */
-			int peek = pos + 4;
-			if (tokens[peek].type == LBCT) {
-				args[n].kind = AAE;
-				args[n].start_pos = pos;
-				pos++;
-				while (is(LBCT)) { pos++; pos++; pos++; }
-			} else {
-				args[n].kind = AOP;
-				snprintf(args[n].text, sizeof args[n].text, "%s",
-					 atom_operand());
-			}
-		} else if (is(MULT) || is(BANDT) || is(LPT)) {
-			args[n].kind = AAE;
-			args[n].start_pos = pos;
-			/* skip past the expression */
-			if (is(ARGT)) {
-				pos++;
-				while (is(LBCT)) { pos++; pos++; pos++; }
-			} else if (is(BANDT)) {
-				pos++;
-				if (is(MULT)) { pos++; while (is(LBCT)) { pos++; pos++; pos++; } }
-				else if (is(IDT)) { pos++; while (is(LBCT)) { pos++; pos++; pos++; } }
-				else if (is(LPT)) {
-					int depth = 1; pos++;
-					while (depth > 0) {
-						if (is(LPT)) depth++;
-						else if (is(RPT)) depth--;
-						if (depth > 0) pos++;
-					}
-					pos++;
-					while (is(LBCT)) { pos++; pos++; pos++; }
-				}
-			} else if (is(MULT)) {
-				pos++;
-				if (is(LPT)) {
-					int depth = 1; pos++;
-					while (depth > 0) {
-						if (is(LPT)) depth++;
-						else if (is(RPT)) depth--;
-						if (depth > 0) pos++;
-					}
-					pos++;
-				} else if (is(IDT)) {
-					pos++;
-				}
-				while (is(LBCT)) { pos++; pos++; pos++; }
-			} else if (is(LPT)) {
-				int depth = 1; pos++;
-				while (depth > 0) {
-					if (is(LPT)) depth++;
-					else if (is(RPT)) depth--;
-					if (depth > 0) pos++;
-				}
-				pos++;
-				while (is(LBCT)) { pos++; pos++; pos++; }
-			}
-		} else if (is(IDT) && tokens[pos + 1].type == LBCT &&
-			   tokens[pos + 2].type == INTT &&
-			   tokens[pos + 3].type == RBCT) {
-			/* indexed pointer argument: p[i] */
-			args[n].kind = AAE;
-			args[n].start_pos = pos;
-			pos += 4;
-			while (is(LBCT)) { pos++; pos++; pos++; }
-		} else if (is(IDT) && tokens[pos + 1].type == LPT) {
-			args[n].kind = ACALL;
-			args[n].start_pos = pos;
-			/* skip IDT, LPT, args..., RPT */
-			pos += 2;
-			{ int depth = 1;
-			while (depth > 0) {
-				if (is(LPT)) depth++;
-				else if (is(RPT)) depth--;
-				if (depth > 0) pos++;
-			}
-			pos++; /* final RPT */
-			}
+			args[n].lab = reg_arr();
 		} else {
-			args[n].kind = AOP;
-			snprintf(args[n].text, sizeof args[n].text, "%s",
-				 atom_operand());
+			args[n].kind = AEXPR;
+			args[n].buf = tmpfile();
+			saved = code;
+			code = args[n].buf;
+			expr_eax();
+			code = saved;
 		}
 		n++;
 		if (accept(COMT))
@@ -466,26 +531,12 @@ parse_call(FILE *out)
 		case AARR:
 			emit(code, "\tpush\t$arr%d\n", args[i].lab);
 			break;
-		case AAE:
-			{
-				int saved = pos;
-				pos = args[i].start_pos;
-				eval_atom("eax");
-				emit(code, "\tpush\t%%eax\n");
-				pos = saved;
-			}
-			break;
-		case ACALL:
-			{
-				int saved = pos;
-				pos = args[i].start_pos;
-				parse_call(out);
-				emit(code, "\tpush\t%%eax\n");
-				pos = saved;
-			}
-			break;
 		default:
-			emit(code, "\tpush\t%s\n", args[i].text);
+			rewind(args[i].buf);
+			while ((k = (int)fread(buf, 1, sizeof buf, args[i].buf)) > 0)
+				fwrite(buf, 1, (size_t)k, code);
+			fclose(args[i].buf);
+			emit(code, "\tpush\t%%eax\n");
 			break;
 		}
 	}
@@ -501,28 +552,6 @@ compound_op(enum token_type t)
 {
 	return t == ADDIT || t == SUBIT || t == MULIT || t == DIVIT ||
 	       t == BANDIT || t == BORIT || t == XORIT;
-}
-
-/*
- * Evaluates an addition/subtraction expression into %eax,
- * reusing the multiplication codegen from expr.c.
- */
-static void
-eval_sum_eax(void)
-{
-	eval_muldiv();
-	while (is(ADDT) || is(SUBT)) {
-		bool add = accept(ADDT);
-
-		if (!add)
-			pos++;
-		emit(code, "\tmov\t%%eax, %%ecx\n");
-		eval_muldiv();
-		if (add)
-			emit(code, "\tadd\t%%ecx, %%eax\n");
-		else
-			emit(code, "\tsub\t%%eax, %%ecx\n\tmov\t%%ecx, %%eax\n");
-	}
 }
 
 /* Stores %eax into the cell pointed by %edi, sized by byt. */
@@ -583,14 +612,14 @@ parse_deref_assign(FILE *out)
 	if (is(IDT))
 		byt = deref_is_byte(sym_find(tokens[pos].start,
 					     tokens[pos].length));
-	eval_atom("edi");
+	expr_into("edi");
 
 	op = tokens[pos].type;
 	if (accept(EQT)) {
-		eval_sum_eax();
+		expr_eax();
 	} else if (compound_op(op)) {
 		pos++;
-		eval_atom("ebx");
+		expr_into("ebx");
 		if (byt)
 			emit(code, "\tmovzbl\t(%%edi), %%eax\n");
 		else
@@ -635,10 +664,10 @@ parse_indexed_assign(FILE *out)
 
 	op = tokens[pos].type;
 	if (accept(EQT)) {
-		eval_sum_eax();
+		expr_eax();
 	} else if (compound_op(op)) {
 		pos++;
-		eval_atom("ebx");
+		expr_into("ebx");
 		if (byt)
 			emit(code, "\tmovzbl\t(%%edi), %%eax\n");
 		else

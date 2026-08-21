@@ -1,0 +1,44 @@
+// bitwise and boolean operators
+
+pub fn main {
+	let a = 0xF0
+	let b = 0x0F
+
+	printf("and=%d\n", a & b)
+	printf("or=%d\n", a | b)
+	printf("xor=%d\n", a ^ b)
+	printf("not=%d\n", ~a)
+	printf("shl=%d\n", 1 << 4)
+	printf("shr=%d\n", -16 >> 2)
+
+	printf("eq=%d ne=%d\n", 3 == 3, 3 != 3)
+	printf("lt=%d le=%d gt=%d ge=%d\n", 1 < 2, 2 <= 2, 3 > 2, 2 >= 3)
+
+	// precedence: & over ^ over |
+	printf("prec=%d\n", 1 | 2 ^ 2 & 3)
+	// shifts bind tighter than +
+	printf("shiftprec=%d\n", 1 << 2 + 1)
+
+	// compound bitwise assignments
+	let c = 0b1100
+	c &= 0b1010
+	printf("cand=%d\n", c)
+	c |= 0b0001
+	printf("cor=%d\n", c)
+	c ^= 0b1111
+	printf("cxor=%d\n", c)
+
+	// unary combinations
+	printf("notnot=%d\n", !!5)
+	printf("neg=%d\n", -7)
+	let v = 9
+	printf("negvar=%d\n", -v)
+
+	// truthiness of plain values
+	if 5 && -3
+		printf("ok truthy\n")
+	if !(0 || 0)
+		printf("ok nor\n")
+
+	ret 0
+}

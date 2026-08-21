@@ -7,7 +7,7 @@
 # Copyright (c) 2026 Pablo Trik Marin
 # License: GPL
 
-./rc tests/*.rn 2>&1 >/dev/null
+./rc tests/*.rn
 cd tests
 ./comp-tests
 cd ..

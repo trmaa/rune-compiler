@@ -1,0 +1,70 @@
+// control flow and boolean logic
+
+pub fn main {
+	let t = 1
+	let f = 0
+
+	if t && f
+		printf("bad: t&&f\n")
+	else
+		printf("ok t&&f is false\n")
+
+	if t || f
+		printf("ok t||f is true\n")
+
+	if !f
+		printf("ok !f is true\n")
+
+	// else-if chain
+	let n = 2
+	if n == 1 {
+		printf("bad one\n")
+	} else if n == 2 {
+		printf("ok two\n")
+	} else {
+		printf("bad many\n")
+	}
+
+	// every comparison at once
+	if 1 < 2 && 2 <= 2 && 3 > 2 && 3 >= 3 && 1 != 2 && 1 == 1
+		printf("ok all cmps\n")
+
+	// short-circuit: the right side must not run
+	let x = 0
+	if f && ++x
+		printf("bad sc\n")
+	printf("sc x=%d\n", x)
+
+	let y = 0
+	if t || ++y
+		printf("ok sc or\n")
+	printf("sc y=%d\n", y)
+
+	// while with a compound condition
+	let i = 0
+	let sum = 0
+	while i < 10 {
+		sum += i
+		i++
+	}
+	printf("sum=%d\n", sum)
+
+	// for loop, single statement body
+	let j
+	let total = 0
+	for j = 0, j < 5, j++
+		total += j * 2
+	printf("total=%d\n", total)
+
+	// nested loops with an if inside
+	let a
+	let b
+	let acc = 0
+	for a = 1, a <= 3, a++
+		for b = 1, b <= 3, b++
+			if a == b
+				acc += a * b
+	printf("acc=%d\n", acc)
+
+	ret 0
+}

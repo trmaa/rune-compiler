@@ -30,6 +30,7 @@ void sym_reset(void);
 void sym_locals_clear(void);
 void sym_register(int kind, char *start, int length, int off, int is_ptr,
 		  int base);
+struct sym *sym_lookup(char *start, int length);
 struct sym *sym_find(char *start, int length);
 int sym_local_count(void);
 

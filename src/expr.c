@@ -12,13 +12,21 @@
 #include "parser.h"
 #include "symtab.h"
 #include "expr.h"
+#include "stmt.h"
 
-static char obuf[64];
-
-void swap(int *a, int *b);
-
-static int chain_end(void);
-static int atom_len(int p);
+/* precedence chain, lowest first */
+static void lor_eax(void);
+static void land_eax(void);
+static void bor_eax(void);
+static void bxor_eax(void);
+static void band_eax(void);
+static void eq_eax(void);
+static void rel_eax(void);
+static void shift_eax(void);
+static void sum_eax(void);
+static void muldiv_eax(void);
+static void unary_eax(void);
+static void primary_eax(void);
 
 /*
  * True when dereferencing s yields a byte: one pointer level
@@ -30,339 +38,408 @@ int deref_is_byte(struct sym *s)
 	return s->is_ptr == 1 && s->base == T_BYTE;
 }
 
-/*
- * Evaluates an addition/subtraction expression into the stack
- * slot at the given offset. The right side is evaluated first
- * and stored into the slot, then the left side is added to it.
- * The left side is found by scanning the token stream for the
- * operator that follows the first multiplication chain.
- */
-void eval_expr(int off)
-{
-	int opos, op, mark, end;
-
-	opos = chain_end();
-	if (opos == -1) {
-		eval_muldiv();
-		emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
-		return;
-	}
-
-	op = tokens[opos].type;
-	mark = pos;
-
-	pos = opos + 1;
-	eval_expr(off);
-	end = pos;
-
-	pos = mark;
-	eval_muldiv();
-	if (op == ADDT)
-		emit(code, "\tadd\t%%eax, %d(%%ebp)\n", off);
-	else
-		emit(code, "\tsub\t%%eax, %d(%%ebp)\n\tneg\t%d(%%ebp)\n", off, off);
-	pos = end;
-}
-
-/*
- * Walks the token stream from the current position over the
- * first multiplication chain (atom [muldiv op atom]*) and
- * returns the position of the addition/subtraction operator
- * that follows it, or -1 if there is none.
- */
-static int
-chain_end(void)
-{
-	int p, len;
-
-	if ((len = atom_len(pos)) == 0)
-		return -1;
-	p = pos + len;
-	while (tokens[p].type == MULT || tokens[p].type == DIVT ||
-	       tokens[p].type == MODT) {
-		p++;
-		if ((len = atom_len(p)) == 0)
-			return -1;
-		p += len;
-	}
-
-	if (tokens[p].type == ADDT || tokens[p].type == SUBT)
-		return p;
-	return -1;
-}
-
-/*
- * Evaluates a multiplication/division chain into %eax.
- * The divisor (or multiplier) is loaded into %ebx.
- */
-void eval_muldiv(void)
-{
-	int tmp_pos;
-
-	eval_atom("eax");
-	while (is(MULT) || is(DIVT) || is(MODT)) {
-		if (is(DIVT) || is(MODT)) {
-			emit(code, "\txor\t%%edx, %%edx\n");
-			tmp_pos = pos;
-			pos++;
-			eval_atom("ebx");
-			emit(code, "\tdiv\t%%ebx\n");
-			swap(&pos, &tmp_pos);
-			if (is(MODT))
-				emit(code, "\tmov\t%%edx, %%eax\n");
-			swap(&pos, &tmp_pos);
-		} else {
-			pos++;
-			eval_atom("ebx");
-			emit(code, "\tmul\t%%ebx\n");
-		}
-	}
-}
-
-/*
- * Evaluates a single operand (literal, local or global
- * variable) into the given register. Chars are emitted in
- * hexadecimal, negative literals keep their sign.
- */
-void eval_atom(const char *reg)
-{
-	int sign = 1;
-
-	if (is(SUBT) && tokens[pos + 1].type == INTT) {
-		pos++;
-		sign = -1;
-	}
-
-	if (is(INTT) || is(CHART)) {
-		if (is(CHART))
-			emit(code, "\tmov\t$0x%x, %%%s\n", num_val(&tokens[pos]), reg);
-		else if (sign < 0)
-			emit(code, "\tmov\t$-%d, %%%s\n", num_val(&tokens[pos]), reg);
-		else
-			emit(code, "\tmov\t$%d, %%%s\n", num_val(&tokens[pos]), reg);
-		pos++;
-	} else if (is(ARGT)) {
-		int n;
-		pos++;
-		expect(LBCT);
-		n = num_val(&tokens[pos]);
-		pos++;
-		expect(RBCT);
-		emit(code, "\tmov\t%d(%%ebp), %%%s\n", n * 4 + 8, reg);
-		while (is(LBCT)) {
-			int idx;
-			pos++;
-			idx = num_val(&tokens[pos]);
-			pos++;
-			expect(RBCT);
-			if (idx == 0)
-				emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
-			else
-				emit(code, "\tmov\t%d(%%%s), %%%s\n", idx * 4, reg, reg);
-		}
-	} else if (is(BANDT)) {
-		pos++;
-		if (is(IDT)) {
-			struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-			pos++;
-			if (s->kind == LOC)
-				emit(code, "\tlea\t%d(%%ebp), %%%s\n", s->off, reg);
-			else
-				emit(code, "\tlea\t%.*s, %%%s\n", s->length, s->start, reg);
-		} else if (is(MULT)) {
-			pos++;
-			eval_atom(reg);
-			emit(code, "\tlea\t(%%%s), %%%s\n", reg, reg);
-		}
-	} else if (is(MULT)) {
-		int byt = 0;
-
-		pos++;
-		if (is(IDT))
-			byt = deref_is_byte(sym_find(tokens[pos].start,
-						     tokens[pos].length));
-		eval_atom(reg);
-		if (byt)
-			emit(code, "\tmovzbl\t(%%%s), %%%s\n", reg, reg);
-		else
-			emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
-		while (is(LBCT)) {
-			int idx;
-
-			pos++;
-			idx = num_val(&tokens[pos]);
-			pos++;
-			expect(RBCT);
-			if (idx != 0)
-				emit(code, "\tadd\t$%d, %%%s\n", idx * 4, reg);
-			emit(code, "\tmov\t(%%%s), %%%s\n", reg, reg);
-		}
-	} else if (is(LPT)) {
-		pos++; /* skip ( */
-		eval_muldiv();
-		while (is(ADDT) || is(SUBT)) {
-			bool add = accept(ADDT);
-			if (!add) pos++;
-			emit(code, "\tmov\t%%eax, %%ecx\n");
-			eval_muldiv();
-			if (add)
-				emit(code, "\tadd\t%%ecx, %%eax\n");
-			else
-				emit(code, "\tsub\t%%eax, %%ecx\n\tmov\t%%ecx, %%eax\n");
-		}
-		expect(RPT);
-		while (is(LBCT)) {
-			int idx;
-
-			pos++;
-			idx = num_val(&tokens[pos]);
-			pos++;
-			expect(RBCT);
-			if (idx != 0)
-				emit(code, "\tadd\t$%d, %%eax\n", idx * 4);
-			emit(code, "\tmov\t(%%eax), %%eax\n");
-		}
-	} else if (is(IDT)) {
-		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-		pos++;
-		if (is(LBCT) && s->is_ptr) {
-			int idx;
-			int byt = deref_is_byte(s);
-			int stride = byt ? 1 : 4;
-
-			pos++;
-			idx = num_val(&tokens[pos]);
-			pos++;
-			expect(RBCT);
-			if (s->kind == LOC)
-				emit(code, "\tmov\t%d(%%ebp), %%ecx\n", s->off);
-			else {
-				emit(code, "\tpush\t%%eax\n");
-				emit(code, "\tmov\t%.*s, %%ecx\n", s->length, s->start);
-			}
-			if (idx == 0) {
-				if (byt)
-					emit(code, "\tmovzbl\t(%%ecx), %%%s\n", reg);
-				else
-					emit(code, "\tmov\t(%%ecx), %%%s\n", reg);
-			} else {
-				if (byt)
-					emit(code, "\tmovzbl\t%d(%%ecx), %%%s\n",
-					     idx * stride, reg);
-				else
-					emit(code, "\tmov\t%d(%%ecx), %%%s\n",
-					     idx * stride, reg);
-			}
-			if (s->kind != LOC)
-				emit(code, "\tpop\t%%eax\n");
-		} else if (s->kind == LOC)
-			emit(code, "\tmov\t%d(%%ebp), %%%s\n", s->off, reg);
-		else
-			emit(code, "\tmov\t%.*s, %%%s\n", s->length, s->start, reg);
-	} else if (is(FLOATT)) {
-		fatal(USER_ERR, NULL, "Float expressions not implemented yet!");
-	} else {
-		fatal(USER_ERR, NULL, "Expression not implemented yet!");
-	}
-}
-
-/*
- * Returns the textual operand of the current atom and
- * consumes it. Used for pushes and return arithmetic.
- */
-const char *
-atom_operand(void)
-{
-	int sign = 1;
-
-	if (is(SUBT) && tokens[pos + 1].type == INTT) {
-		pos++;
-		sign = -1;
-	}
-
-	if (is(INTT) || is(CHART)) {
-		if (is(CHART))
-			snprintf(obuf, sizeof obuf, "$0x%x", num_val(&tokens[pos]));
-		else if (sign < 0)
-			snprintf(obuf, sizeof obuf, "$-%d", num_val(&tokens[pos]));
-		else
-			snprintf(obuf, sizeof obuf, "$%d", num_val(&tokens[pos]));
-		pos++;
-	} else if (is(IDT)) {
-		struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
-
-		pos++;
-		if (s->kind == LOC)
-			snprintf(obuf, sizeof obuf, "%d(%%ebp)", s->off);
-		else
-			snprintf(obuf, sizeof obuf, "%.*s", s->length, s->start);
-	} else if (is(ARGT)) {
-		int n;
-		pos++;
-		expect(LBCT);
-		n = num_val(&tokens[pos]);
-		pos++;
-		expect(RBCT);
-		snprintf(obuf, sizeof obuf, "%d(%%ebp)", n * 4 + 8);
-	} else {
-		fatal(USER_ERR, NULL, "Expression as operand not implemented yet!");
-	}
-	return obuf;
-}
-
-int next_is_arith(void)
-{
-	enum token_type t = tokens[pos + 1].type;
-
-	return t == ADDT || t == SUBT || t == MULT || t == DIVT || t == MODT;
-}
-
 int is_lit(void)
 {
 	return is(INTT) || is(CHART) ||
 	       (is(SUBT) && tokens[pos + 1].type == INTT);
 }
 
-/* Number of tokens an atom takes starting at position p. */
-static int
-atom_len(int p)
+/*
+ * True when the token at position p is a binary operator,
+ * so a lone literal or variable must not be taken as the
+ * whole expression.
+ */
+int op_follows(int p)
 {
-	if (tokens[p].type == INTT || tokens[p].type == CHART)
+	switch (tokens[p].type) {
+	case ADDT: case SUBT: case MULT: case DIVT: case MODT:
+	case SLT: case SRT:
+	case LTT: case GTT: case LET: case GET:
+	case EQQT: case NOTIT:
+	case BANDT: case BORT: case XORT:
+	case ANDT: case ORT:
 		return 1;
-	if (tokens[p].type == SUBT && tokens[p + 1].type == INTT)
-		return 2;
-	if (tokens[p].type == IDT) {
-		int len = 1;
-		if (tokens[p + 1].type == LBCT)
-			len += 3;
-		return len;
+	default:
+		return 0;
 	}
-	if (tokens[p].type == ARGT) {
-		int len = 4;
-		while (tokens[p + len].type == LBCT)
-			len += 3;
-		return len;
-	}
-	if (tokens[p].type == BANDT) {
-		if (tokens[p + 1].type == IDT)
-			return 2;
-		if (tokens[p + 1].type == MULT)
-			return 1 + atom_len(p + 2);
-	}
-	if (tokens[p].type == MULT) {
-		int len = 1 + atom_len(p + 1);
+}
 
-		while (len > 0 && tokens[p + len].type == LBCT)
-			len += 3;
-		return len;
-	}
-	if (tokens[p].type == LPT) {
-		int inner = atom_len(p + 1);
-		int len = inner > 0 ? 2 + inner : 0; /* LPT inner RPT */
+/* Evaluates a full expression into %eax. */
+void expr_eax(void)
+{
+	lor_eax();
+}
 
-		while (len > 0 && tokens[p + len].type == LBCT)
-			len += 3;
-		return len;
+/* Evaluates a full expression into the given register. */
+void expr_into(const char *reg)
+{
+	expr_eax();
+	if (strcmp(reg, "eax") != 0)
+		emit(code, "\tmov\t%%eax, %%%s\n", reg);
+}
+
+/*
+ * Evaluates a full expression into the stack slot at the
+ * given offset.
+ */
+void eval_expr(int off)
+{
+	expr_eax();
+	emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
+}
+
+/* Emits incl/decl on the cell of s. */
+static void emit_incdec(int inc, struct sym *s)
+{
+	if (s->kind == LOC)
+		emit(code, inc ? "\tincl\t%d(%%ebp)\n" : "\tdecl\t%d(%%ebp)\n",
+		     s->off);
+	else
+		emit(code, inc ? "\tincl\t%.*s\n" : "\tdecl\t%.*s\n",
+		     s->length, s->start);
+}
+
+/*
+ * Loads through constant indexes from the pointer in %eax.
+ * The stride depends on the pointee type; byte loads zero
+ * extend.
+ */
+static void index_load(int stride, int byt)
+{
+	while (is(LBCT)) {
+		int idx;
+
+		pos++;
+		idx = num_val(&tokens[pos]);
+		pos++;
+		expect(RBCT);
+		if (idx != 0)
+			emit(code, "\tadd\t$%d, %%eax\n", idx * stride);
+		if (byt)
+			emit(code, "\tmovzbl\t(%%eax), %%eax\n");
+		else
+			emit(code, "\tmov\t(%%eax), %%eax\n");
 	}
-	return 0;
+}
+
+/*
+ * Applies a binary operator with the left side already in
+ * %eax: saves it across the evaluation of the right side,
+ * which lands in %ebx.
+ */
+static void binop(const char *insn, void (*sub)(void))
+{
+	pos++;
+	emit(code, "\tpush\t%%eax\n");
+	sub();
+	emit(code, "\tmov\t%%eax, %%ebx\n\tpop\t%%eax\n");
+	emit(code, "\t%s\t%%ebx, %%eax\n", insn);
+}
+
+/* Applies a comparison producing 0/1 in %eax. */
+static void compare(const char *cc, void (*sub)(void))
+{
+	pos++;
+	emit(code, "\tpush\t%%eax\n");
+	sub();
+	emit(code, "\tmov\t%%eax, %%ebx\n\tpop\t%%eax\n");
+	emit(code, "\tcmp\t%%ebx, %%eax\n"
+		   "\tset%s\t%%al\n\tmovzbl\t%%al, %%eax\n", cc);
+}
+
+/* || with short-circuit: each pair gets its own labels. */
+static void
+lor_eax(void)
+{
+	land_eax();
+	while (is(ORT)) {
+		int t = new_label(), end = new_label();
+
+		pos++;
+		emit(code, "\ttest\t%%eax, %%eax\n\tjne\tL%d\n", t);
+		land_eax();
+		emit(code, "\ttest\t%%eax, %%eax\n"
+			   "\tsetne\t%%al\n\tmovzbl\t%%al, %%eax\n"
+			   "\tjmp\tL%d\n", end);
+		emit(code, "L%d:\n\tmov\t$1, %%eax\nL%d:\n", t, end);
+	}
+}
+
+/* && with short-circuit: each pair gets its own labels. */
+static void
+land_eax(void)
+{
+	bor_eax();
+	while (is(ANDT)) {
+		int f = new_label(), end = new_label();
+
+		pos++;
+		emit(code, "\ttest\t%%eax, %%eax\n\tje\tL%d\n", f);
+		bor_eax();
+		emit(code, "\ttest\t%%eax, %%eax\n"
+			   "\tsetne\t%%al\n\tmovzbl\t%%al, %%eax\n"
+			   "\tjmp\tL%d\n", end);
+		emit(code, "L%d:\n\txor\t%%eax, %%eax\nL%d:\n", f, end);
+	}
+}
+
+static void
+bor_eax(void)
+{
+	bxor_eax();
+	while (is(BORT))
+		binop("or", bxor_eax);
+}
+
+static void
+bxor_eax(void)
+{
+	band_eax();
+	while (is(XORT))
+		binop("xor", band_eax);
+}
+
+static void
+band_eax(void)
+{
+	eq_eax();
+	while (is(BANDT))
+		binop("and", eq_eax);
+}
+
+static void
+eq_eax(void)
+{
+	rel_eax();
+	while (is(EQQT) || is(NOTIT))
+		compare(is(EQQT) ? "e" : "ne", rel_eax);
+}
+
+static void
+rel_eax(void)
+{
+	const char *cc;
+
+	shift_eax();
+	while (is(LTT) || is(GTT) || is(LET) || is(GET)) {
+		cc = is(LTT) ? "l" : is(GTT) ? "g" : is(LET) ? "le" : "ge";
+		compare(cc, shift_eax);
+	}
+}
+
+static void
+shift_eax(void)
+{
+	int lft;
+
+	sum_eax();
+	while (is(SLT) || is(SRT)) {
+		lft = is(SLT);
+
+		pos++;
+		emit(code, "\tpush\t%%eax\n");
+		sum_eax();
+		emit(code, "\tmov\t%%eax, %%ecx\n\tpop\t%%eax\n");
+		emit(code, lft ? "\tshl\t%%cl, %%eax\n" : "\tsar\t%%cl, %%eax\n");
+	}
+}
+
+static void
+sum_eax(void)
+{
+	muldiv_eax();
+	while (is(ADDT) || is(SUBT))
+		binop(is(ADDT) ? "add" : "sub", muldiv_eax);
+}
+
+static void
+muldiv_eax(void)
+{
+	int div, mod;
+
+	unary_eax();
+	while (is(MULT) || is(DIVT) || is(MODT)) {
+		div = is(DIVT) || is(MODT);
+		mod = is(MODT);
+
+		pos++;
+		emit(code, "\tpush\t%%eax\n");
+		unary_eax();
+		emit(code, "\tmov\t%%eax, %%ebx\n\tpop\t%%eax\n");
+		if (div) {
+			emit(code, "\txor\t%%edx, %%edx\n\tdiv\t%%ebx\n");
+			if (mod)
+				emit(code, "\tmov\t%%edx, %%eax\n");
+		} else {
+			emit(code, "\tmul\t%%ebx\n");
+		}
+	}
+}
+
+/*
+ * Unary operators: logical not, bitwise not, prefix inc/dec,
+ * unary minus, dereference and address-of.
+ */
+static void
+unary_eax(void)
+{
+	struct sym *s;
+	int byt;
+
+	if (is(NOTT)) {
+		pos++;
+		unary_eax();
+		emit(code, "\ttest\t%%eax, %%eax\n"
+			   "\tsete\t%%al\n\tmovzbl\t%%al, %%eax\n");
+		return;
+	}
+
+	if (is(BNOTT)) {
+		pos++;
+		unary_eax();
+		emit(code, "\tnot\t%%eax\n");
+		return;
+	}
+
+	if (is(INCT) || is(DECT)) {
+		int inc = is(INCT);
+
+		pos++;
+		s = sym_find(tokens[pos].start, tokens[pos].length);
+		expect(IDT);
+		emit_incdec(inc, s);
+		if (s->kind == LOC)
+			emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+		else
+			emit(code, "\tmov\t%.*s, %%eax\n", s->length, s->start);
+		return;
+	}
+
+	if (is(SUBT)) {
+		pos++;
+		if (is(INTT)) {
+			/* negative literal keeps its sign in the mov */
+			emit(code, "\tmov\t$-%d, %%eax\n",
+			     num_val(&tokens[pos]));
+			pos++;
+			return;
+		}
+		unary_eax();
+		emit(code, "\tneg\t%%eax\n");
+		return;
+	}
+
+	if (is(MULT)) {
+		byt = 0;
+		pos++;
+		if (is(IDT))
+			byt = deref_is_byte(sym_find(tokens[pos].start,
+						     tokens[pos].length));
+		unary_eax();
+		if (byt)
+			emit(code, "\tmovzbl\t(%%eax), %%eax\n");
+		else
+			emit(code, "\tmov\t(%%eax), %%eax\n");
+		index_load(4, 0);
+		return;
+	}
+
+	if (is(BANDT)) {
+		pos++;
+		if (is(IDT)) {
+			s = sym_find(tokens[pos].start, tokens[pos].length);
+			pos++;
+			if (s->kind == LOC)
+				emit(code, "\tlea\t%d(%%ebp), %%eax\n", s->off);
+			else
+				emit(code, "\tlea\t%.*s, %%eax\n",
+				     s->length, s->start);
+		} else if (is(MULT)) {
+			/* &(*x) is just x */
+			pos++;
+			unary_eax();
+			emit(code, "\tlea\t(%%eax), %%eax\n");
+		} else {
+			fatal(USER_ERR, NULL, "Expected variable after &!");
+		}
+		return;
+	}
+
+	primary_eax();
+}
+
+/*
+ * A primary: literals, arg[N], parenthesized expressions,
+ * calls, variables with their constant indexes and postfix
+ * inc/dec.
+ */
+static void
+primary_eax(void)
+{
+	struct sym *s;
+	int n;
+
+	if (is(INTT) || is(CHART)) {
+		if (is(CHART))
+			emit(code, "\tmov\t$0x%x, %%eax\n",
+			     num_val(&tokens[pos]));
+		else
+			emit(code, "\tmov\t$%d, %%eax\n",
+			     num_val(&tokens[pos]));
+		pos++;
+	} else if (is(FLOATT)) {
+		fatal(USER_ERR, NULL, "Float expressions not implemented yet!");
+	} else if (is(ARGT)) {
+		pos++;
+		expect(LBCT);
+		n = num_val(&tokens[pos]);
+		pos++;
+		expect(RBCT);
+		emit(code, "\tmov\t%d(%%ebp), %%eax\n", n * 4 + 8);
+		index_load(4, 0);
+	} else if (is(LPT)) {
+		pos++; /* skip ( */
+		expr_eax();
+		expect(RPT);
+		index_load(4, 0);
+	} else if (is(IDT)) {
+		s = sym_lookup(tokens[pos].start, tokens[pos].length);
+
+		/* undeclared name followed by ( is a call */
+		if (!s && tokens[pos + 1].type == LPT) {
+			parse_call();
+			return;
+		}
+		if (!s)
+			fatal(USER_ERR, NULL, "Unknown variable '%.*s'!",
+			      tokens[pos].length, tokens[pos].start);
+		pos++;
+
+		if (is(LBCT) && s->is_ptr) {
+			int byt = deref_is_byte(s);
+			int stride = byt ? 1 : 4;
+
+			if (s->kind == LOC)
+				emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+			else
+				emit(code, "\tmov\t%.*s, %%eax\n",
+				     s->length, s->start);
+			index_load(stride, byt);
+			return;
+		}
+
+		if (s->kind == LOC)
+			emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
+		else
+			emit(code, "\tmov\t%.*s, %%eax\n", s->length, s->start);
+
+		/* postfix ++/-- keeps the old value in %eax */
+		if (is(INCT) || is(DECT)) {
+			emit_incdec(is(INCT), s);
+			pos++;
+		}
+	} else {
+		fatal(USER_ERR, NULL, "Expression not implemented yet! tok: %s",
+		      t_name(tokens[pos].type));
+	}
 }

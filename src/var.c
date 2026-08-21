@@ -12,7 +12,7 @@
 #include "symtab.h"
 #include "var.h"
 
-static void list_values(FILE *out);
+static void list_values(void);
 static int list_has_float(int p);
 static int list_has_char(int p);
 
@@ -80,7 +80,7 @@ void parse_var(enum visi vis, FILE *out)
 		if (flt && !word)
 			fatal(USER_ERR, NULL, "Float in a byte array!");
 		emit(out, flt ? "\t.float\t" : (word ? "\t.long\t" : "\t.byte\t"));
-		list_values(out);
+		list_values();
 	} else if (is(STRT)) {
 		if (sz > 1)
 			fatal(USER_ERR, NULL, "Array with string initializer!");
@@ -98,10 +98,10 @@ void parse_var(enum visi vis, FILE *out)
  * Registers a string literal into the .data section and
  * returns its label number.
  */
-int reg_str(FILE *out)
+int reg_str(void)
 {
-	sec_data(out);
-	emit(out, "str%d:\n\t.string\t\"%.*s\"\n", str_cnt,
+	sec_data(out_cur);
+	emit(out_cur, "str%d:\n\t.string\t\"%.*s\"\n", str_cnt,
 	     tokens[pos].length, tokens[pos].start);
 
 	return str_cnt++;
@@ -113,19 +113,19 @@ int reg_str(FILE *out)
  * literals with floats become .float and literals with
  * chars become .byte.
  */
-int reg_arr(FILE *out)
+int reg_arr(void)
 {
 	int flt = list_has_float(pos), byt = list_has_char(pos);
 
-	sec_data(out);
-	emit(out, "arr%d:\n", arr_cnt);
+	sec_data(out_cur);
+	emit(out_cur, "arr%d:\n", arr_cnt);
 	if (flt)
-		emit(out, "\t.float\t");
+		emit(out_cur, "\t.float\t");
 	else if (byt)
-		emit(out, "\t.byte\t");
+		emit(out_cur, "\t.byte\t");
 	else
-		emit(out, "\t.long\t");
-	list_values(out);
+		emit(out_cur, "\t.long\t");
+	list_values();
 
 	return arr_cnt++;
 }
@@ -164,20 +164,20 @@ list_has_char(int p)
  * including the closing bracket.
  */
 static void
-list_values(FILE *out)
+list_values(void)
 {
 	int first = 1;
 
 	pos++; /* LBKT */
 	while (!is(RBKT)) {
 		if (!first)
-			emit(out, ", ");
+			emit(out_cur, ", ");
 		first = 0;
 		if (is(INTT) || is(CHART)) {
-			emit(out, "%d", num_val(&tokens[pos]));
+			emit(out_cur, "%d", num_val(&tokens[pos]));
 			pos++;
 		} else if (is(FLOATT)) {
-			emit(out, "%.*s", tokens[pos].length, tokens[pos].start);
+			emit(out_cur, "%.*s", tokens[pos].length, tokens[pos].start);
 			pos++;
 		} else {
 			fatal(USER_ERR, NULL, "Invalid value in array literal!");
@@ -187,5 +187,5 @@ list_values(FILE *out)
 		break;
 	}
 	expect(RBKT);
-	emit(out, "\n");
+	emit(out_cur, "\n");
 }

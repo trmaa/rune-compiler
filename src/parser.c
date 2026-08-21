@@ -16,7 +16,10 @@
 
 int pos;
 FILE *code;
+FILE *out_cur;
 int has_fn, data_used, str_cnt, arr_cnt;
+
+static int lab_cnt;
 
 /*
  * Parses the tokenized source and emits assembly code for it.
@@ -28,10 +31,12 @@ void parse(FILE *out)
 {
 	pos = 0;
 	code = NULL;
+	out_cur = out;
 	has_fn = 0;
 	data_used = 0;
 	str_cnt = 0;
 	arr_cnt = 0;
+	lab_cnt = 0;
 	sym_reset();
 
 	for (;;) {
@@ -115,4 +120,10 @@ void sec_data(FILE *out)
 		data_used = 1;
 		emit(out, "\t.data\n");
 	}
+}
+
+/* Returns a fresh jump label number. */
+int new_label(void)
+{
+	return lab_cnt++;
 }

@@ -13,6 +13,9 @@ See examples at tests/.
 - Float literals (3.14) and floats in words
 - Functions, calls and string/array literals (.text section)
 - Local variables, arithmetic expressions (with precedence) and return statements
+- Control flow: `if`/`else`, `while`, and `for init, cond, step`
+- Comparisons (`== != < > <= >=`), boolean logic with short-circuit (`&& || !`)
+  and bitwise operators (`& | ^ ~ << >>`) in every expression
 
 ## How to
 
@@ -46,6 +49,15 @@ $ ld -m elf_i386 -no-pie file.s # link
 $ ./a.out
 ```
 
+You can use macros, defines, includes, and enums by using the GCC preprocessor too.
+
+```console
+$ cc -E file.rn -o file-prep.rn
+$ rc file-prep.rn
+$ cc -m32 -no-pie file-prep.s
+$ ./a.out
+```
+
 ## Specs
 
 There are two data types: word, and byte (plus the pointers to each, of size word- 32 bits-). A word can also hold a float (32 bits).
@@ -64,6 +76,24 @@ a level (`leb **pp` is a pointer to a pointer to byte).
   `p[i] -= 3`, with `+= -= *= /= &= |= ^=`.
 - Pointer arithmetic is raw: `p + 1` adds exactly 1, like
   assembly. Bytes load as unsigned (zero extended).
+
+### Control flow and expressions
+
+Bodies are a block between braces or the single statement
+that follows. No parentheses around conditions.
+
+```
+if a > b          while i < n       for i = 0, i < n, i++
+	printf(..)    	printf(..)    	printf(..)
+else
+	printf(..)
+```
+
+Expressions follow C precedence: `|| && | ^ & == != < > <= >=
+<< >> + - * / %` plus unary `! ~ - * &`. Calls are
+expressions too, so `let x = foo(2) + bar(3)` works. `&&` and
+`||` short-circuit. `i++`/`++i` work as statements, in call
+arguments and in the `for` step.
 
 Input: .rn file, Output: x86-i386 AT&T .s file.
 

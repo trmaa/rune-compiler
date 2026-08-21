@@ -11,11 +11,11 @@
 #include "symtab.h"
 
 void eval_expr(int off);
+void expr_eax(void);
+void expr_into(const char *reg);
 void eval_atom(const char *reg);
-void eval_muldiv(void);
 int deref_is_byte(struct sym *s);
-const char *atom_operand(void);
-int next_is_arith(void);
 int is_lit(void);
+int op_follows(int p);
 
 #endif

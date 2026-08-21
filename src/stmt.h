@@ -12,5 +12,6 @@
 #include "parser.h"
 
 void parse_fn(enum visi vis, FILE *out);
+void parse_call(void);
 
 #endif

@@ -19,6 +19,7 @@ enum visi {
 /* shared codegen state */
 extern int pos;
 extern FILE *code;
+extern FILE *out_cur;
 extern int has_fn, data_used, str_cnt, arr_cnt;
 
 /* token walking and output helpers */
@@ -27,6 +28,7 @@ bool accept(enum token_type t);
 void expect(enum token_type t);
 void emit(FILE *out, const char *fmt, ...);
 void sec_data(FILE *out);
+int new_label(void);
 
 void parse(FILE *out);
 
