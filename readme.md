@@ -54,7 +54,7 @@ $ ./a.out
 You can use macros, defines, includes, and enums by using the GCC preprocessor too.
 
 ```console
-$ cc -E file.rn -o file-prep.rn
+$ cc -E -P -x c file.rn -o file-prep.rn
 $ rc file-prep.rn
 $ cc -m32 -no-pie file-prep.s
 $ ./a.out
