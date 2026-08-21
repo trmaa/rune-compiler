@@ -35,7 +35,7 @@ main(int argc, char *argv[])
 		fatal(USER_ERR, help, "%s needs files to compile!", argv[0]);
 
 	for (; fid < argc; fid++) {
-		log("Compiling: %s\n", argv[fid]);
+		log("Compiling: %s", argv[fid]);
 		compile(argv[fid]);
 	}
 
