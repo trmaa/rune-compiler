@@ -27,12 +27,12 @@ $ make debug f=file.rn # see all debug logs of rc after compiling file.rn
 ### Usage
 
 ```console
-$ ./rc -help
+$ rc -help
 Usage: rc [options] [file.rn]
 Options:
         -h print this text.
         -v show the version.
-$ ./rc file.rn # compiles file.rn into file.s
+$ rc file.rn # compiles file.rn into file.s
 $ cc -m32 -no-pie file.s # assembles and links the binarie with libc and outputs a program
 $ ./a.out # run the program
 ```
@@ -40,7 +40,7 @@ $ ./a.out # run the program
 Alternatively, if you don't need libc, just:
 
 ```console
-$ ./rc file.rn
+$ rc file.rn
 $ as --32 file.s -o file.o # assembles
 $ ld -m elf_i386 -no-pie file.s # link
 $ ./a.out
