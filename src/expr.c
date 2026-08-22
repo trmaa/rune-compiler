@@ -31,11 +31,34 @@ static void primary_eax(void);
 /*
  * True when dereferencing s yields a byte: one pointer level
  * left and it points to bytes. Deeper levels still hold
- * pointers, which are words.
+ * pointers, which are words. Arrays deref to their element
+ * type directly.
  */
 int deref_is_byte(struct sym *s)
 {
 	return s->is_ptr == 1 && s->base == T_BYTE;
+}
+
+int elem_is_byte(struct sym *s)
+{
+	return s->dim > 0 ? s->base == T_BYTE : deref_is_byte(s);
+}
+
+/*
+ * Symbol a dereference applies to, looking through opening
+ * parentheses: *p, *(p), *(p + i). Returns NULL when the
+ * operand does not start with a variable name.
+ */
+struct sym *
+deref_target_sym(void)
+{
+	int p = pos;
+
+	while (tokens[p].type == LPT)
+		p++;
+	if (tokens[p].type != IDT)
+		return NULL;
+	return sym_lookup(tokens[p].start, tokens[p].length);
 }
 
 int is_lit(void)
@@ -91,6 +114,9 @@ void eval_expr(int off)
 /* Emits incl/decl on the cell of s. */
 static void emit_incdec(int inc, struct sym *s)
 {
+	if (s->dim > 0)
+		fatal(USER_ERR, NULL, "Can't increment an array!");
+
 	if (s->kind == LOC)
 		emit(code, inc ? "\tincl\t%d(%%ebp)\n" : "\tdecl\t%d(%%ebp)\n",
 		     s->off);
@@ -100,26 +126,68 @@ static void emit_incdec(int inc, struct sym *s)
 }
 
 /*
- * Loads through constant indexes from the pointer in %eax.
- * The stride depends on the pointee type; byte loads zero
- * extend.
+ * Adds a runtime index to the address held in reg: the base is
+ * saved, any expression is evaluated as the index and scaled by
+ * stride, then the base is restored and added. The caller
+ * consumes the closing bracket.
  */
-static void index_load(int stride, int byt)
+void emit_index_add(int stride, const char *reg)
 {
-	while (is(LBCT)) {
-		int idx;
+	emit(code, "\tpush\t%%%s\n", reg);
+	expr_eax();
+	if (stride != 1)
+		emit(code, "\timul\t$%d, %%eax\n", stride);
+	emit(code, "\tmov\t%%eax, %%ecx\n\tpop\t%%%s\n"
+		   "\tadd\t%%ecx, %%%s\n", reg, reg);
+}
 
-		pos++;
+/*
+ * Consumes one [ ... ] group adding its scaled offset to the
+ * address in %eax. A lone literal takes the immediate add fast
+ * path; any other expression goes through emit_index_add.
+ */
+static void index_step(int stride)
+{
+	int idx;
+
+	pos++;
+	if (is(INTT) && tokens[pos + 1].type == RBCT) {
 		idx = num_val(&tokens[pos]);
 		pos++;
 		expect(RBCT);
 		if (idx != 0)
 			emit(code, "\tadd\t$%d, %%eax\n", idx * stride);
+		return;
+	}
+
+	emit_index_add(stride, "eax");
+	expect(RBCT);
+}
+
+/*
+ * Loads through indexes from the address in %eax. Each step
+ * adds the scaled index and then loads, so [i][j] chains deref
+ * repeatedly. Byte loads zero extend.
+ */
+static void index_load(int stride, int byt)
+{
+	while (is(LBCT)) {
+		index_step(stride);
 		if (byt)
 			emit(code, "\tmovzbl\t(%%eax), %%eax\n");
 		else
 			emit(code, "\tmov\t(%%eax), %%eax\n");
 	}
+}
+
+/*
+ * Same as index_load but only computes addresses: used to take
+ * the address of an element.
+ */
+static void index_ref(int stride)
+{
+	while (is(LBCT))
+		index_step(stride);
 }
 
 /*
@@ -332,9 +400,9 @@ unary_eax(void)
 	if (is(MULT)) {
 		byt = 0;
 		pos++;
-		if (is(IDT))
-			byt = deref_is_byte(sym_find(tokens[pos].start,
-						     tokens[pos].length));
+		s = deref_target_sym();
+		if (s)
+			byt = elem_is_byte(s);
 		unary_eax();
 		if (byt)
 			emit(code, "\tmovzbl\t(%%eax), %%eax\n");
@@ -345,15 +413,42 @@ unary_eax(void)
 	}
 
 	if (is(BANDT)) {
+		int stride;
+
 		pos++;
 		if (is(IDT)) {
 			s = sym_find(tokens[pos].start, tokens[pos].length);
 			pos++;
-			if (s->kind == LOC)
-				emit(code, "\tlea\t%d(%%ebp), %%eax\n", s->off);
-			else
-				emit(code, "\tlea\t%.*s, %%eax\n",
-				     s->length, s->start);
+
+			if (is(LBCT) && s->dim == 0 && !s->is_ptr)
+				fatal(USER_ERR, NULL,
+				      "Indexing a non-pointer!");
+
+			stride = elem_is_byte(s) ? 1 : 4;
+			if (!is(LBCT)) {
+				/* plain address of the cell */
+				if (s->kind == LOC)
+					emit(code, "\tlea\t%d(%%ebp), %%eax\n",
+					     s->off);
+				else
+					emit(code, "\tlea\t%.*s, %%eax\n",
+					     s->length, s->start);
+			} else if (s->kind == LOC && s->dim > 0) {
+				/* &arr[i] walks from the buffer base */
+				emit(code, "\tlea\t%d(%%ebp), %%eax\n",
+				     s->off);
+				index_ref(stride);
+			} else {
+				/* &p[i] walks from the pointer value */
+				if (s->kind == LOC)
+					emit(code,
+					     "\tmov\t%d(%%ebp), %%eax\n",
+					     s->off);
+				else
+					emit(code, "\tmov\t%.*s, %%eax\n",
+					     s->length, s->start);
+				index_ref(stride);
+			}
 		} else if (is(MULT)) {
 			/* &(*x) is just x */
 			pos++;
@@ -415,23 +510,39 @@ primary_eax(void)
 			      tokens[pos].length, tokens[pos].start);
 		pos++;
 
-		if (is(LBCT) && s->is_ptr) {
-			int byt = deref_is_byte(s);
+		if ((s->is_ptr || s->dim > 0) && is(LBCT)) {
+			int byt = elem_is_byte(s);
 			int stride = byt ? 1 : 4;
 
-			if (s->kind == LOC)
-				emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
-			else
+			/* an array name is the address of element 0 */
+			if (s->kind == LOC) {
+				if (s->dim > 0)
+					emit(code,
+					     "\tlea\t%d(%%ebp), %%eax\n",
+					     s->off);
+				else
+					emit(code,
+					     "\tmov\t%d(%%ebp), %%eax\n",
+					     s->off);
+			} else {
 				emit(code, "\tmov\t%.*s, %%eax\n",
 				     s->length, s->start);
+			}
 			index_load(stride, byt);
 			return;
 		}
 
-		if (s->kind == LOC)
-			emit(code, "\tmov\t%d(%%ebp), %%eax\n", s->off);
-		else
+		/* bare array name decays to its first element */
+		if (s->kind == LOC) {
+			if (s->dim > 0)
+				emit(code, "\tlea\t%d(%%ebp), %%eax\n",
+				     s->off);
+			else
+				emit(code, "\tmov\t%d(%%ebp), %%eax\n",
+				     s->off);
+		} else {
 			emit(code, "\tmov\t%.*s, %%eax\n", s->length, s->start);
+		}
 
 		/* postfix ++/-- keeps the old value in %eax */
 		if (is(INCT) || is(DECT)) {

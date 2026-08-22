@@ -11,23 +11,25 @@
 #include "symtab.h"
 
 #define SYM_MAX 128
-
 static struct sym syms[SYM_MAX];
-static int sym_cnt, loc_cnt;
+static int sym_cnt, loc_cnt, loc_bytes;
 
 void sym_reset(void)
 {
 	sym_cnt = 0;
 	loc_cnt = 0;
+	loc_bytes = 0;
 }
 
 /* Clears only the local symbols, keeping the globals. */
 void sym_locals_clear(void)
 {
 	loc_cnt = 0;
+	loc_bytes = 0;
 }
 
-void sym_register(int kind, char *start, int length, int off, int is_ptr, int base)
+void sym_register(int kind, char *start, int length, int off, int is_ptr,
+		  int base, int dim)
 {
 	if (sym_cnt >= SYM_MAX)
 		fatal(USER_ERR, NULL, "Too many variables!");
@@ -38,9 +40,20 @@ void sym_register(int kind, char *start, int length, int off, int is_ptr, int ba
 	syms[sym_cnt].off = off;
 	syms[sym_cnt].is_ptr = is_ptr;
 	syms[sym_cnt].base = base;
+	syms[sym_cnt].dim = dim;
 	sym_cnt++;
 	if (kind == LOC)
 		loc_cnt++;
+}
+
+/*
+ * Reserves nbytes of stack for a local and returns the offset
+ * of its lowest byte relative to %ebp.
+ */
+int sym_local_alloc(int nbytes)
+{
+	loc_bytes += nbytes;
+	return -loc_bytes;
 }
 
 /*

@@ -24,14 +24,16 @@ struct sym {
 	int off;
 	int is_ptr;	/* pointer depth (number of stars) */
 	int base;	/* enum base_type of the final pointee */
+	int dim;	/* element count of an array, 0 if not one */
 };
 
 void sym_reset(void);
 void sym_locals_clear(void);
 void sym_register(int kind, char *start, int length, int off, int is_ptr,
-		  int base);
+		  int base, int dim);
 struct sym *sym_lookup(char *start, int length);
 struct sym *sym_find(char *start, int length);
 int sym_local_count(void);
+int sym_local_alloc(int nbytes);
 
 #endif

@@ -79,6 +79,13 @@ a level (`leb **pp` is a pointer to a pointer to byte).
 
 - Address-of with `&var`, dereference with `*p`, indexing with
   `p[i]` (stride 1 on byte pointers, 4 on word pointers).
+  `&arr[i]` is the base plus a constant offset.
+- Local arrays reserve their full size on the stack: `leb buf[256]`
+  is a 256-byte buffer and its name decays to the address of
+  element 0, so it works like a pointer to that buffer (`buf[i]`,
+  `*(buf + n)`, passing it to functions, returning it). With an
+  initializer (`leb s[8] = "hi"`) the dimensions are ignored and
+  the address of the literal is stored, as before.
 - Stores through pointers: `*p = v` and `p[i] = v`. Byte
   pointers store one byte (movb), word pointers four.
 - Compound assignment works everywhere: `x += 1`, `*p += 2`,

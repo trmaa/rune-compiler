@@ -34,6 +34,7 @@ static void emit_binop(enum token_type op);
 static void emit_incdec(int inc, struct sym *s);
 static void parse_deref_assign(FILE *out);
 static void parse_indexed_assign(FILE *out);
+static int skip_index(int p);
 
 /*
  * Parses a function definition and emits its code into the
@@ -170,12 +171,14 @@ parse_stmt(FILE *out)
 	}
 
 	/* indexed assignment: p[i] = expr / p[i] op= expr */
-	if (is(IDT) && tokens[pos + 1].type == LBCT &&
-	    tokens[pos + 2].type == INTT && tokens[pos + 3].type == RBCT &&
-	    (tokens[pos + 4].type == EQT ||
-	     compound_op(tokens[pos + 4].type))) {
-		parse_indexed_assign(out);
-		return;
+	if (is(IDT) && tokens[pos + 1].type == LBCT) {
+		int j = skip_index(pos + 1);
+
+		if (j > 0 && (tokens[j].type == EQT ||
+			      compound_op(tokens[j].type))) {
+			parse_indexed_assign(out);
+			return;
+		}
 	}
 
 	/* assignment: var = expr / var op= expr */
@@ -183,6 +186,9 @@ parse_stmt(FILE *out)
 			compound_op(tokens[pos + 1].type))) {
 		struct sym *t = sym_find(tokens[pos].start, tokens[pos].length);
 		enum token_type op = tokens[pos + 1].type;
+
+		if (t->dim > 0)
+			fatal(USER_ERR, NULL, "Can't assign to an array!");
 
 		pos += 2; /* IDT EQ */
 		if (op == EQT) {
@@ -228,6 +234,9 @@ emit_incdec(int inc, struct sym *s)
 		s = sym_find(tokens[pos].start, tokens[pos].length);
 		pos++;
 	}
+
+	if (s->dim > 0)
+		fatal(USER_ERR, NULL, "Can't increment an array!");
 
 	if (s->kind == LOC)
 		emit(code, inc ? "\tincl\t%d(%%ebp)\n" : "\tdecl\t%d(%%ebp)\n",
@@ -377,19 +386,43 @@ parse_var_local(FILE *out)
 	name = &tokens[pos - 1];
 
 	/* array dimensions */
-	if (accept(LBCT)) {
-		if (is(INTT)) {
-			dim = num_val(&tokens[pos]);
-			pos++;
+	while (accept(LBCT)) {
+		int v;
+
+		if (!is(INTT)) {
+			expect(RBCT);
+			break;
 		}
+		v = num_val(&tokens[pos]);
+		pos++;
 		expect(RBCT);
+		dim = dim ? dim * v : v;
 	}
 
-	off = -(sym_local_count() + 1) * 4;
-	sym_register(LOC, name->start, name->length, off, ptr,
-		     word ? T_WORD : T_BYTE);
+	/*
+	 * An initialized declaration keeps the historical
+	 * behavior: the address of the literal lands in a single
+	 * 4-byte cell and the dimensions are ignored. Without an
+	 * initializer, an array reserves its full size on the
+	 * stack and its name decays to the address of element 0,
+	 * so the slot offset is the base of the buffer.
+	 */
+	if (is(EQT))
+		dim = 0;
 
-	emit(code, "\tsub\t$4, %%esp\n");
+	if (dim > 0) {
+		int size = dim * (word ? 4 : 1);
+
+		off = sym_local_alloc(size);
+		sym_register(LOC, name->start, name->length, off, ptr,
+			     word ? T_WORD : T_BYTE, dim);
+		emit(code, "\tsub\t$%d, %%esp\n", size);
+	} else {
+		off = sym_local_alloc(4);
+		sym_register(LOC, name->start, name->length, off, ptr,
+			     word ? T_WORD : T_BYTE, 0);
+		emit(code, "\tsub\t$4, %%esp\n");
+	}
 
 	if (accept(EQT)) {
 		if (is_lit() && !op_follows(pos + (is(SUBT) ? 2 : 1))) {
@@ -605,13 +638,14 @@ emit_binop(enum token_type op)
 static void
 parse_deref_assign(FILE *out)
 {
+	struct sym *s;
 	int byt = 0;
 	enum token_type op;
 
 	pos++; /* MULT */
-	if (is(IDT))
-		byt = deref_is_byte(sym_find(tokens[pos].start,
-					     tokens[pos].length));
+	s = deref_target_sym();
+	if (s)
+		byt = elem_is_byte(s);
 	expr_into("edi");
 
 	op = tokens[pos].type;
@@ -633,34 +667,67 @@ parse_deref_assign(FILE *out)
 }
 
 /*
- * Parses an indexed assignment through a pointer: p[i] = expr
- * or p[i] op= expr. Only constant indexes are supported,
- * matching the read side. The stride depends on the pointee
- * type: bytes advance one, words four.
+ * Position right after the ] that closes the bracket group
+ * opening at p, or -1 when the group is not balanced before a
+ * newline or end of file.
+ */
+static int
+skip_index(int p)
+{
+	int depth = 0;
+
+	for (; tokens[p].type != EOFT && tokens[p].type != NEWT; p++) {
+		if (tokens[p].type == LBCT) {
+			depth++;
+			continue;
+		}
+		if (tokens[p].type == RBCT && --depth == 0)
+			return p + 1;
+	}
+	return -1;
+}
+
+/*
+ * Parses an indexed assignment: p[i] = expr or p[i] op= expr.
+ * The index may be any expression. The base lands in %edi,
+ * each bracket group adds its scaled offset, and the store is
+ * sized by the element type: bytes with movb, words four.
  */
 static void
 parse_indexed_assign(FILE *out)
 {
 	struct sym *s = sym_find(tokens[pos].start, tokens[pos].length);
+	int arr = s->kind == LOC && s->dim > 0;
 	int byt, stride, idx;
 	enum token_type op;
 
-	if (!s->is_ptr)
+	if (!s->is_ptr && !arr)
 		fatal(USER_ERR, NULL, "Indexed assignment on a non-pointer!");
-	byt = deref_is_byte(s);
+	byt = elem_is_byte(s);
 	stride = byt ? 1 : 4;
 
 	pos++; /* IDT */
-	pos++; /* LBCT */
-	idx = num_val(&tokens[pos]);
-	pos += 2; /* INT RBCT */
 
-	if (s->kind == LOC)
+	/* an array name is the address of element 0 */
+	if (arr)
+		emit(code, "\tlea\t%d(%%ebp), %%edi\n", s->off);
+	else if (s->kind == LOC)
 		emit(code, "\tmov\t%d(%%ebp), %%edi\n", s->off);
 	else
 		emit(code, "\tmov\t%.*s, %%edi\n", s->length, s->start);
-	if (idx != 0)
-		emit(code, "\tadd\t$%d, %%edi\n", idx * stride);
+
+	while (accept(LBCT)) {
+		if (is(INTT) && tokens[pos + 1].type == RBCT) {
+			idx = num_val(&tokens[pos]);
+			pos++;
+			expect(RBCT);
+			if (idx != 0)
+				emit(code, "\tadd\t$%d, %%edi\n", idx * stride);
+		} else {
+			emit_index_add(stride, "edi");
+			expect(RBCT);
+		}
+	}
 
 	op = tokens[pos].type;
 	if (accept(EQT)) {

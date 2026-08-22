@@ -1,0 +1,7 @@
+pub fn main {
+	leb str[256]
+	str[10] = 'a'
+	*(str + 30) = 'b'
+	str[255] = 0
+	ret str // = &str[0]
+}
