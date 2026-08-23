@@ -18,6 +18,7 @@ See examples at tests/.
 - Control flow: `if`/`else`, `while`, and `for init, cond, step`
 - Comparisons (`== != < > <= >=`), boolean logic with short-circuit (`&& || !`)
   and bitwise operators (`& | ^ ~ << >>`) in every expression
+- Native syscalls
 - Syntax highlighting on vim
 
 ## To do
