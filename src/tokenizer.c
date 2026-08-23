@@ -19,6 +19,7 @@ int token_count;
 static char charbuf[MAX_TOKENS][16];
 
 static void add_token(enum token_type type, char *start, int length);
+static void add_asm_token(char *src, int *i);
 static int is_hex(char c);
 static int hex_val(char c);
 
@@ -93,6 +94,8 @@ void tokenize(char *src)
 				add_token(ARGT, start, len);
 			else if (len == 3 && !memcmp(start, "sys", 3))
 				add_token(SYST, start, len);
+			else if (len == 3 && !memcmp(start, "asm", 3))
+				add_asm_token(src, &i);
 			else
 				add_token(IDT, start, len);
 			continue;
@@ -322,6 +325,55 @@ hex_val(char c)
 	return c - 'A' + 10;
 }
 
+/*
+ * Handles the asm keyword: with a following brace group the
+ * body is scanned raw, braces balanced and strings respected,
+ * into a single RAW token; without it asm stays a plain ASMT.
+ */
+static void
+add_asm_token(char *src, int *i)
+{
+	int j = *i;
+	int depth = 0;
+	int inq = 0;
+	char *body;
+
+	while (src[j] == ' ' || src[j] == '\t' ||
+	       src[j] == '\n' || src[j] == '\r')
+		j++;
+
+	if (src[j] != '{') {
+		add_token(ASMT, src + (*i - 3), 3);
+		return;
+	}
+
+	j++; /* opening brace */
+	body = &src[j];
+	add_token(ASMT, src + (*i - 3), 3);
+	while (src[j] != '\0') {
+		if (inq) {
+			if (src[j] == '\\')
+				j++;
+			else if (src[j] == '"')
+				inq = 0;
+		} else if (src[j] == '"') {
+			inq = 1;
+		} else if (src[j] == '{') {
+			depth++;
+		} else if (src[j] == '}') {
+			if (depth == 0)
+				break;
+			depth--;
+		}
+		j++;
+	}
+	if (src[j] == '\0')
+		fatal(USER_ERR, NULL, "Unterminated asm block!");
+
+	add_token(RAWT, body, (int)(&src[j] - body));
+	*i = j + 1;
+}
+
 static void
 add_token(enum token_type type, char *start, int length)
 {
@@ -399,6 +451,8 @@ char *t_name(enum token_type t)
 	case ARGT:   return "ARG";
 	case RETT:   return "RET";
 	case SYST:   return "SYS";
+	case ASMT:   return "ASM";
+	case RAWT:   return "RAW";
 	case IFT:    return "IF";
 	case ELSET:  return "ELSE";
 	case WHILET: return "WHILE";

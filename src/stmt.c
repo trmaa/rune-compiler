@@ -114,6 +114,11 @@ parse_stmt(FILE *out)
 {
 	struct sym *s;
 
+	if (is(ASMT)) {
+		parse_asm();
+		return;
+	}
+
 	if (is(SYST) && tokens[pos + 1].type == LPT) {
 		parse_syscall();
 		return;
@@ -648,6 +653,28 @@ void parse_syscall(void)
 
 	emit(code, "\tint\t$0x80\n");
 	emit(code, "\n");
+}
+
+/*
+ * Syntax suport: raw assembly block. The tokenizer hands the
+ * whole body over as one RAW token; its source bytes go into
+ * the .text section verbatim, keeping tabs and newlines.
+ */
+void parse_asm(void)
+{
+	struct token *t;
+
+	pos++; /* ASMT */
+	if (!is(RAWT))
+		fatal(USER_ERR, NULL, "Expected '{' after asm!");
+
+	t = &tokens[pos];
+	pos++;
+
+	if (t->length > 0) {
+		fwrite(t->start, 1, (size_t)t->length, code);
+		emit(code, "\n\n");
+	}
 }
 
 /* True for the compound assignment operators. */
