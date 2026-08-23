@@ -47,34 +47,11 @@ $ make install-syntax # install syntax for vim
 
 ### Usage
 
+See it using one of this:
+
 ```console
 $ rc -help
-Usage: rc [options] [file.rn]
-Options:
-        -h print this text.
-        -v show the version.
-$ rc file.rn # compiles file.rn into file.s
-$ cc -m32 -no-pie file.s # assembles and links the binarie with libc and outputs a program
-$ ./a.out # run the program
-$ make debug f=file.rn # see all debug logs of rc after compiling file.rn
-```
-
-Alternatively, if you don't need libc, just:
-
-```console
-$ rc file.rn
-$ as --32 file.s -o file.o # assembles
-$ ld -m elf_i386 -no-pie file.s # link
-$ ./a.out
-```
-
-You can use macros, defines, includes, and enums by using the GCC preprocessor too.
-
-```console
-$ cc -E -P -x c file.rn -o file-prep.rn
-$ rc file-prep.rn
-$ cc -m32 -no-pie file-prep.s
-$ ./a.out
+$ man rc
 ```
 
 ## Specs
@@ -121,7 +98,7 @@ expressions too, so `let x = foo(2) + bar(3)` works. `&&` and
 `||` short-circuit. `i++`/`++i` work as statements, in call
 arguments and in the `for` step.
 
-Input: .rn file, Output: x86-i386 AT&T .s file.
+Input: .rn file, Output: x86-i386 binary.
 
 Variables outside of any scope, and strings are stored in .data.
 
