@@ -30,7 +30,7 @@ main() {
 	for f in src/*; do
 		[[ -f $f ]] || continue # omit dirs
 
-		local match=$(nl -ba < $f | grep -F $1)
+		local match=$(nl -ba < $f | grep -F "$1")
 		if [[ -n $match ]]; then
 			echo $f >&2
 			echo "$match"
@@ -38,4 +38,4 @@ main() {
 	done
 }
 
-main $@
+main "$@"
