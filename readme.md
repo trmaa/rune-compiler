@@ -8,6 +8,14 @@ See examples at tests/.
 
 ![](logo.png)
 
+## Format
+
+- Tabs over staces, a tab is 8 spaces long
+- ; are unnecessary
+- No space between function-name and args, but space between operator and args.
+	ex: print(), main(), foo()... sys (), if (), while ()...
+- No \n before {
+
 ## Done for now
 
 - Tokenizer
