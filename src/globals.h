@@ -13,6 +13,9 @@
 struct conf {
 	bool silent;
 	bool debug;
+	bool assemble;
+	bool link;
+	char out[16];
 };
 
 extern const char *AUTHOR;

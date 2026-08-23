@@ -13,6 +13,7 @@
 #include "symtab.h"
 #include "expr.h"
 #include "stmt.h"
+#include "var.h"
 
 /* precedence chain, lowest first */
 static void lor_eax(void);
@@ -480,7 +481,13 @@ primary_eax(void)
 	struct sym *s;
 	int n;
 
-	if (is(INTT) || is(CHART)) {
+	if (is(STRT)) {
+		/* the string direction on .data */
+		int lab = reg_str();
+
+		emit(code, "\tmov\t$str%d, %%eax\n", lab);
+		pos++;
+	} else if (is(INTT) || is(CHART)) {
 		if (is(CHART))
 			emit(code, "\tmov\t$0x%x, %%eax\n",
 			     num_val(&tokens[pos]));

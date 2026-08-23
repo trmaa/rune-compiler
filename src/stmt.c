@@ -461,8 +461,7 @@ parse_var_local(FILE *out)
 			int lab = reg_str();
 			pos++;
 			emit(code, "\tlea\tstr%d, %%eax\n", lab);
-			emit(code, word ? "\tmov\t%%eax, %d(%%ebp)\n"
-				: "\tmovb\t%%al, %d(%%ebp)\n", off);
+			emit(code, "\tmov\t%%eax, %d(%%ebp)\n", off);
 		} else if (is(LBKT)) {
 			/* array literal initializer */
 			int lab = reg_arr();

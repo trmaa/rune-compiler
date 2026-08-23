@@ -9,8 +9,6 @@ _start:
 	call	main
 	add	$8, %esp
 
-	mov	%eax, %ebx
-	mov	$1, %eax
-	int	$0x80
-
+	push	%eax
+	call	exit
 	hlt

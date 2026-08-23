@@ -54,6 +54,14 @@ void parse_var(enum visi vis, FILE *out)
 	}
 
 	if (!accept(EQT)) {
+		if (ptr) {
+			/* a pointer is a word regardless of setw/setb */
+			if (sz > 1)
+				emit(out, "\t.zero\t%d\n", sz * 4);
+			else
+				emit(out, "\t.long\t0\n");
+			return;
+		}
 		if (sz > 1)
 			emit(out, "\t.zero\t%d\n", sz * (word ? 4 : 1));
 		else
@@ -84,8 +92,18 @@ void parse_var(enum visi vis, FILE *out)
 	} else if (is(STRT)) {
 		if (sz > 1)
 			fatal(USER_ERR, NULL, "Array with string initializer!");
-		emit(out, "\t.string\t\"%.*s\"\n", tokens[pos].length, tokens[pos].start);
-		pos++;
+		if (ptr) {
+			/* a pointer holds the address of the literal */
+			int lab = str_cnt;
+
+			emit(out, "\t.long\tstr%d\n", lab);
+			reg_str(); /* emits str<lab>, bumps str_cnt */
+			pos++;
+		} else {
+			emit(out, "\t.string\t\"%.*s\"\n",
+			     tokens[pos].length, tokens[pos].start);
+			pos++;
+		}
 	} else if (accept(BANDT)) {
 		expect(IDT);
 		emit(out, "\t.long\t%.*s\n", tokens[pos - 1].length, tokens[pos - 1].start);

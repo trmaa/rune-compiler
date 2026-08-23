@@ -20,11 +20,16 @@ void say_version()
 void help()
 {
 	printf("Usage: rc [options] [file.rn]\n");
-	printf("Options:\t\t(opts can be one char long)\n");
-	printf("\t-debug\t\tprints extra info about the compiling process.\n");
-	printf("\t-help\t\tprint this text.\n");
-	printf("\t-silent\t\tlogs dont show up.\n");
-	printf("\t-version\tshow the version.\n");
+	printf("Options:\n");
+	printf("\t-compile, -c\tcompile and assemble only, dont link.\n");
+	printf("\t-debug, -d\tprints extra info about the compiling process.\n");
+	printf("\t-help, -h\tprint this text.\n");
+	printf("\t-out, -o FILE\tset output name (default a.out).\n");
+	printf("\t-S\t\tcompile only, outputs *.s.\n");
+	printf("\t-silent, -s\tlogs dont show up.\n");
+	printf("\t-version, -v\tshow the version.\n");
+	printf("For mor info do:\n");
+	printf("\t$ man rc\n");
 }
 
 void log(const char *fmt, ...)

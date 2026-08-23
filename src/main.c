@@ -10,7 +10,7 @@
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";
-const char *VERSION = "r1.2-moss";
+const char *VERSION = "r1.3-mitocondrio";
 
 struct conf CONFIG;
 
@@ -20,23 +20,29 @@ static int get_opts(int argc, char *argv[]);
 
 main(int argc, char *argv[])
 {
-	int fid;
+	int fid, i;
 
 	if (argc == 1)
 		fatal(USER_ERR, help, "%s needs args!", argv[0]);
 
 	fid = get_opts(argc, argv);
 
-#ifdef DEBUG
-	CONFIG.debug = true;
-#endif
-
 	if (fid >= argc)
 		fatal(USER_ERR, help, "%s needs files to compile!", argv[0]);
 
-	for (; fid < argc; fid++) {
-		log("Compiling: %s", argv[fid]);
-		compile(argv[fid]);
+	for (i = fid; i < argc; i++) {
+		log("Compiling: %s", argv[i]);
+		compile(argv[i]);
+
+		if (CONFIG.assemble) {
+			log("Assembling: %s", argv[i]);
+			assemble(argv[i]);
+		}
+	}
+
+	if (CONFIG.link) {
+		log("Linking: %s", CONFIG.out);
+		link(&argv[fid]);
 	}
 
 	return OK;
@@ -47,20 +53,41 @@ get_opts(int argc, char *argv[])
 {
 	int i = 1;
 
+	/* defaults */
+	CONFIG.silent = false;
+#ifdef DEBUG
+	CONFIG.debug = true;
+#else
+	CONFIG.debug = false;
+#endif
+	CONFIG.assemble = true;
+	CONFIG.link = true;
+	strcpy(CONFIG.out, "a.out");
+
 	while (i < argc && argv[i][0] == '-') {
 		switch (argv[i][1]) {
-		case 'h':
-			help();
-			exit(OK);
-		case 'v':
-			say_version();
-			exit(OK);
-		case 's':
-			CONFIG.silent = true;
+		case 'c':
+			CONFIG.link = false;
 			break;
 		case 'd':
 			CONFIG.debug = true;
 			break;
+		case 'h':
+			help();
+			exit(OK);
+		case 'o':
+			strcpy(CONFIG.out, argv[++i]);
+			break;
+		case 's':
+			CONFIG.silent = true;
+			break;
+		case 'S':
+			CONFIG.assemble = false;
+			CONFIG.link = false;
+			break;
+		case 'v':
+			say_version();
+			exit(OK);
 		default:
 			fatal(USER_ERR, help, "Wrong opt!");
 		}
