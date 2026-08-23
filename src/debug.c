@@ -26,7 +26,7 @@ void help()
 	printf("\t-help, -h\tprint this text.\n");
 	printf("\t-out, -o FILE\tset output name (default a.out).\n");
 	printf("\t-S\t\tcompile only, outputs *.s.\n");
-	printf("\t-silent, -s\tlogs dont show up.\n");
+	printf("\t-Verbose, -V\tlogs show up.\n");
 	printf("\t-version, -v\tshow the version.\n");
 	printf("For mor info do:\n");
 	printf("\t$ man rc\n");
@@ -34,7 +34,7 @@ void help()
 
 void log(const char *fmt, ...)
 {
-	if (!CONFIG.silent) {
+	if (CONFIG.verbose) {
 		char buf[1024];
 		va_list args;
 

@@ -11,7 +11,7 @@
 #include <stdbool.h>
 
 struct conf {
-	bool silent;
+	bool verbose;
 	bool debug;
 	bool assemble;
 	bool link;

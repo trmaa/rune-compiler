@@ -10,7 +10,7 @@
 #include "debug.h"
 
 const char *AUTHOR = "Pablo Trik Marin";
-const char *VERSION = "r1.3-mitocondrio";
+const char *VERSION = "r1.4-grafite";
 
 struct conf CONFIG;
 
@@ -54,7 +54,7 @@ get_opts(int argc, char *argv[])
 	int i = 1;
 
 	/* defaults */
-	CONFIG.silent = false;
+	CONFIG.verbose = false;
 #ifdef DEBUG
 	CONFIG.debug = true;
 #else
@@ -78,8 +78,8 @@ get_opts(int argc, char *argv[])
 		case 'o':
 			strcpy(CONFIG.out, argv[++i]);
 			break;
-		case 's':
-			CONFIG.silent = true;
+		case 'V':
+			CONFIG.verbose = true;
 			break;
 		case 'S':
 			CONFIG.assemble = false;
