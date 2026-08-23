@@ -30,10 +30,10 @@ See examples at tests/.
 - Raw assembly
 - Syntax highlighting on vim
 
-## To do
+## 2.0 will have
 
-- Structs
-- Integrate gcc preprocessor, assembler, and linker by forking and execing
+- Structs, and enums
+- Integrated gcc preprocessor
 
 ## How to
 
