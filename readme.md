@@ -19,6 +19,7 @@ See examples at tests/.
 - Comparisons (`== != < > <= >=`), boolean logic with short-circuit (`&& || !`)
   and bitwise operators (`& | ^ ~ << >>`) in every expression
 - Native syscalls
+- Raw assembly
 - Syntax highlighting on vim
 
 ## To do
