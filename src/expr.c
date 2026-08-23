@@ -112,7 +112,8 @@ void eval_expr(int off)
 }
 
 /* Emits incl/decl on the cell of s. */
-static void emit_incdec(int inc, struct sym *s)
+static void
+emit_incdec(int inc, struct sym *s)
 {
 	if (s->dim > 0)
 		fatal(USER_ERR, NULL, "Can't increment an array!");
@@ -146,7 +147,8 @@ void emit_index_add(int stride, const char *reg)
  * address in %eax. A lone literal takes the immediate add fast
  * path; any other expression goes through emit_index_add.
  */
-static void index_step(int stride)
+static void
+index_step(int stride)
 {
 	int idx;
 
@@ -169,7 +171,8 @@ static void index_step(int stride)
  * adds the scaled index and then loads, so [i][j] chains deref
  * repeatedly. Byte loads zero extend.
  */
-static void index_load(int stride, int byt)
+static void
+index_load(int stride, int byt)
 {
 	while (is(LBCT)) {
 		index_step(stride);
@@ -184,7 +187,8 @@ static void index_load(int stride, int byt)
  * Same as index_load but only computes addresses: used to take
  * the address of an element.
  */
-static void index_ref(int stride)
+static void
+index_ref(int stride)
 {
 	while (is(LBCT))
 		index_step(stride);
@@ -195,7 +199,8 @@ static void index_ref(int stride)
  * %eax: saves it across the evaluation of the right side,
  * which lands in %ebx.
  */
-static void binop(const char *insn, void (*sub)(void))
+static void
+binop(const char *insn, void (*sub)(void))
 {
 	pos++;
 	emit(code, "\tpush\t%%eax\n");
@@ -205,7 +210,8 @@ static void binop(const char *insn, void (*sub)(void))
 }
 
 /* Applies a comparison producing 0/1 in %eax. */
-static void compare(const char *cc, void (*sub)(void))
+static void
+compare(const char *cc, void (*sub)(void))
 {
 	pos++;
 	emit(code, "\tpush\t%%eax\n");

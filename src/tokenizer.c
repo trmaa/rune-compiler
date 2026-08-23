@@ -91,6 +91,8 @@ void tokenize(char *src)
 				add_token(FORT, start, len);
 			else if (len == 3 && !memcmp(start, "arg", 3))
 				add_token(ARGT, start, len);
+			else if (len == 3 && !memcmp(start, "sys", 3))
+				add_token(SYST, start, len);
 			else
 				add_token(IDT, start, len);
 			continue;
@@ -396,6 +398,7 @@ char *t_name(enum token_type t)
 	case EOFT:   return "EOF";
 	case ARGT:   return "ARG";
 	case RETT:   return "RET";
+	case SYST:   return "SYS";
 	case IFT:    return "IF";
 	case ELSET:  return "ELSE";
 	case WHILET: return "WHILE";

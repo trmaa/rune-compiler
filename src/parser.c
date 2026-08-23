@@ -39,7 +39,7 @@ void parse(FILE *out)
 	lab_cnt = 0;
 	sym_reset();
 
-	for (;;) {
+	while (!is(EOFT)) {
 		while (is(NEWT) || is(SEMIT))
 			pos++;
 

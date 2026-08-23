@@ -1,0 +1,3 @@
+pub fn main {
+	sys(4, 1, "Hola!", 5)
+}

@@ -13,5 +13,6 @@
 
 void parse_fn(enum visi vis, FILE *out);
 void parse_call(void);
+void parse_syscall(void);
 
 #endif

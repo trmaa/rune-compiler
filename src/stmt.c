@@ -73,7 +73,7 @@ void parse_fn(enum visi vis, FILE *out)
 static void
 parse_stmts(FILE *out)
 {
-	for (;;) {
+	while (!is(RBKT)) {
 		while (is(NEWT) || is(SEMIT))
 			pos++;
 
@@ -113,6 +113,11 @@ static void
 parse_stmt(FILE *out)
 {
 	struct sym *s;
+
+	if (is(SYST) && tokens[pos + 1].type == LPT) {
+		parse_syscall();
+		return;
+	}
 
 	if (is(IDT) && tokens[pos + 1].type == LPT) {
 		parse_call();
@@ -576,6 +581,72 @@ void parse_call(void)
 	emit(code, "\tcall\t%.*s\n", name->length, name->start);
 	if (n > 0)
 		emit(code, "\tadd\t$%d, %%esp\n", n * 4);
+	emit(code, "\n");
+}
+
+/*
+ * Syntax suport: operator for syscalls. Arguments are pushed
+ * and then popped into the registers, so evaluating one can
+ * never clobber a register already loaded for another.
+ */
+void parse_syscall(void)
+{
+	enum { ASTR, AARR, AEXPR };
+	struct argdesc args[6];
+	char buf[1024];
+	int n = 0, i, k;
+	FILE *saved;
+	char *regs[] = { "eax", "ebx", "ecx", "edx", "esi", "edi" };
+
+	pos++; /* SYST */
+	expect(LPT);
+
+	while (!is(RPT)) {
+		if (n >= 6)
+			fatal(USER_ERR, NULL, "Too many arguments!");
+		if (is(STRT)) {
+			args[n].kind = ASTR;
+			args[n].lab = reg_str();
+			pos++;
+		} else if (is(LBKT)) {
+			args[n].kind = AARR;
+			args[n].lab = reg_arr();
+		} else {
+			args[n].kind = AEXPR;
+			args[n].buf = tmpfile();
+			saved = code;
+			code = args[n].buf;
+			expr_eax();
+			code = saved;
+		}
+		n++;
+		if (accept(COMT))
+			continue;
+		break;
+	}
+	expect(RPT);
+
+	for (i = 0; i < n; i++) {
+		switch (args[i].kind) {
+		case ASTR:
+			emit(code, "\tpush\t$str%d\n", args[i].lab);
+			break;
+		case AARR:
+			emit(code, "\tpush\t$arr%d\n", args[i].lab);
+			break;
+		default:
+			rewind(args[i].buf);
+			while ((k = (int)fread(buf, 1, sizeof buf, args[i].buf)) > 0)
+				fwrite(buf, 1, (size_t)k, code);
+			fclose(args[i].buf);
+			emit(code, "\tpush\t%%eax\n");
+			break;
+		}
+	}
+	for (i = n - 1; i >= 0; i--)
+		emit(code, "\tpop\t%%%s\n", regs[i]);
+
+	emit(code, "\tint\t$0x80\n");
 	emit(code, "\n");
 }
 

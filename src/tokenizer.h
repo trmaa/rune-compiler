@@ -39,7 +39,7 @@ enum token_type {
 	/* white space */
 	NEWT, EOFT,
 	/* built-ins */
-	ARGT, RETT,
+	ARGT, RETT, SYST,
 	IFT, ELSET, WHILET, FORT
 };
 
