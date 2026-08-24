@@ -1,0 +1,3 @@
+[submodule "examples/http-server"]
+	path = examples/http-server
+	url = git@github.com:trmaa/rune-http-server.git
