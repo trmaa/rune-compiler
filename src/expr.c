@@ -538,7 +538,7 @@ primary_eax(void)
 					     "\tmov\t%d(%%ebp), %%eax\n",
 					     s->off);
 			} else {
-				emit(code, "\tmov\t%.*s, %%eax\n",
+				emit(code, "\tlea\t%.*s, %%eax\n",
 				     s->length, s->start);
 			}
 			index_load(stride, byt);
